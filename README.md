@@ -1,6 +1,7 @@
-# RSS AI Newsletter (Go)
+# kaffe-letter (Go)
+![kaffe-letter logo](internal/logo.png)
 
-Newsletter diária em PT-BR com curadoria por IA (`gpt-5-nano` por padrão), baseada em feeds RSS, com envio por e-mail e opcionalmente Telegram.
+Newsletter diaria em PT-BR com curadoria por IA (`gpt-5-nano` por padrao), baseada em feeds RSS, com envio por e-mail e opcionalmente Telegram.
 
 ## Stack
 - Go 1.22
@@ -11,13 +12,36 @@ Newsletter diária em PT-BR com curadoria por IA (`gpt-5-nano` por padrão), bas
 - Docker (arm64 para Raspberry Pi 5)
 
 ## Como rodar localmente
-1. Copie `.env.example` para `.env` e preencha chaves.
+1. Opcionalmente copie `.env.example` para `.env` se quiser mudar `DATABASE_PATH` ou `SERVER_ADDR`.
 2. Execute:
 
 ```bash
 go mod tidy
 go run ./cmd/newsletter
 ```
+
+## Painel Admin
+Para subir o admin self-hosted:
+
+```bash
+go run ./cmd/newsletter --mode server
+```
+
+O painel usa Go + HTML templates + HTMX e grava parametros no SQLite em `app_settings`.
+Os templates do admin ficam separados em `internal/webadmin/templates/admin.html` e sao embutidos no binario via `embed`.
+Os segredos também ficam no SQLite, criptografados com AES-GCM. A chave local do app é gerada automaticamente em `data/master.key`.
+
+Parametros editoriais e operacionais passam a ser geridos pelo painel:
+- feeds RSS
+- quotas e chunk size
+- pesos de curadoria
+- assunto, timezone e timeout
+- SMTP host/user/from
+- OpenAI API key
+- SMTP password
+- destinatarios de email
+- Telegram bot token
+- chat IDs e flags do Telegram
 
 ## Reenvio manual
 - Reenviar última execução com sucesso:
@@ -39,19 +63,15 @@ docker compose run --rm newsletter
 Exemplo no host (Raspberry Pi):
 
 ```cron
-0 8 * * * cd /caminho/rss-ai-newsletter && /usr/bin/docker compose run --rm newsletter >> ./logs/cron.log 2>&1
+0 8 * * * cd /caminho/kaffe-letter && /usr/bin/docker compose run --rm newsletter >> ./logs/cron.log 2>&1
 ```
 
 ## Variáveis principais
-- `OPENAI_MODEL` (default: `gpt-5-nano`)
-- `SMTP_URL` (ex.: `smtp://usuario:senha@host:587`)
-- `TELEGRAM_ENABLED`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS`
-- `CURATION_CHUNK_SIZE` (ex.: `15`, reduz timeout em lotes grandes)
-- `CANDIDATE_POOL_SIZE` (quantos candidatos entram na curadoria)
-- `RSS_FEEDS`
-- `CURATED_ITEMS_COUNT`
-- `MAX_PER_DOMAIN`
-- `WEIGHT_RELEVANCE`, `WEIGHT_NOVELTY`, `WEIGHT_CREDIBILITY`, `WEIGHT_TARGET`
+- `DATABASE_PATH`
+- `SERVER_ADDR`
+- `LOG_LEVEL`
+
+O projeto não depende mais de `.env` para segredos ou configuração editorial.
 
 ## Visão Macro
 1. **Ingestão RSS**:
@@ -95,6 +115,8 @@ extraídas de `media:content`/`media:thumbnail`, `enclosure` ou `<img>` na descr
 - `items_curated`: itens finais da newsletter com campos EN + PT-BR.
 - `deliveries`: histórico de envio/reenvio por execução.
 - `run_metrics`: tempos por etapa para observabilidade operacional.
+- `app_settings`: configuração persistida do painel admin.
+- `data/master.key`: chave local usada para criptografar os segredos persistidos.
 
 ## Diagrama: Arquitetura (Macro)
 ```mermaid

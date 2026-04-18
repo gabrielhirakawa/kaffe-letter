@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>kaffe-letter Admin</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <link rel="stylesheet" href="/assets/admin.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/assets/logo.png" alt="kaffe-letter logo" class="brand-logo">
+        <h1>kaffe-letter</h1>
+        <p>Admin self-hosted para operar a curadoria, fontes e entregas.</p>
+      </div>
+
+      <nav class="nav">
+        <a href="/admin?tab=dashboard" class="{{if isActiveTab .ActiveTab "dashboard"}}active{{end}}">Dashboard</a>
+        <a href="/admin?tab=categorias" class="{{if isActiveTab .ActiveTab "categorias"}}active{{end}}">Categorias</a>
+        <a href="/admin?tab=feeds" class="{{if isActiveTab .ActiveTab "feeds"}}active{{end}}">Feeds</a>
+        <a href="/admin?tab=ia" class="{{if isActiveTab .ActiveTab "ia"}}active{{end}}">IA</a>
+        <a href="/admin?tab=entrega" class="{{if isActiveTab .ActiveTab "entrega"}}active{{end}}">Entrega</a>
+        <a href="/admin?tab=sistema" class="{{if isActiveTab .ActiveTab "sistema"}}active{{end}}">Sistema</a>
+      </nav>
+
+      <div class="status">
+        <div class="pill"><span class="state-icon {{if .OpenAIKeySet}}ok{{else}}warn{{end}}">{{if .OpenAIKeySet}}✓{{else}}!{{end}}</span>OpenAI key: {{if .OpenAIKeySet}}configurada{{else}}nao configurada{{end}}</div>
+        <div class="pill"><span class="state-icon {{if .SMTPPassSet}}ok{{else}}warn{{end}}">{{if .SMTPPassSet}}✓{{else}}!{{end}}</span>SMTP pass: {{if .SMTPPassSet}}configurada{{else}}nao configurada{{end}}</div>
+        <div class="pill"><span class="state-icon {{if .TelegramKeySet}}ok{{else}}warn{{end}}">{{if .TelegramKeySet}}✓{{else}}!{{end}}</span>Telegram token: {{if .TelegramKeySet}}configurado{{else}}nao configurado{{end}}</div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <h2>{{if isActiveTab .ActiveTab "dashboard"}}Dashboard{{else if isActiveTab .ActiveTab "categorias"}}Categorias{{else if isActiveTab .ActiveTab "feeds"}}Feeds{{else if isActiveTab .ActiveTab "ia"}}IA{{else if isActiveTab .ActiveTab "entrega"}}Entrega{{else}}Sistema{{end}}</h2>
+        <p>{{if isActiveTab .ActiveTab "dashboard"}}Visao geral das execucoes e operacao diária.{{else if isActiveTab .ActiveTab "categorias"}}Categorias editoriais e cotas da newsletter.{{else if isActiveTab .ActiveTab "feeds"}}Fontes RSS ligadas a cada categoria.{{else if isActiveTab .ActiveTab "ia"}}Modelo, chunking e pesos de curadoria.{{else if isActiveTab .ActiveTab "entrega"}}SMTP, email e Telegram.{{else}}Parametros gerais, timeout e orientacoes de backup.{{end}}</p>
+        <div id="flash"></div>
+        <div class="hero-actions">
+          <button hx-post="/admin/actions/run-now" hx-target="#flash" hx-swap="innerHTML">Executar agora</button>
+          <button class="secondary" hx-post="/admin/actions/resend-latest" hx-target="#flash" hx-swap="innerHTML">Reenviar ultimo sucesso</button>
+        </div>
+      </section>
+
+      <section class="section {{if isActiveTab .ActiveTab "dashboard"}}active{{end}}">
+        <div class="cards">
+          <section class="card" hx-get="/admin/status/current" hx-trigger="load, every 4s" hx-swap="outerHTML">
+            <h2>Execução Atual</h2>
+            {{if gt .CurrentRun.ID 0}}
+            <table>
+              <tbody>
+                <tr><td>Run</td><td>#{{.CurrentRun.ID}}</td></tr>
+                <tr><td>Status</td><td><span class="status-badge {{statusClass .CurrentRun.Status}}"><span class="spinner {{if isRunning .CurrentRun.Status}}running{{end}}"></span>{{statusLabel .CurrentRun.Status}}</span></td></tr>
+                <tr><td>Etapa</td><td>{{stageLabel .CurrentRun.Stage}}</td></tr>
+                <tr><td>Mensagem</td><td>{{.CurrentRun.Progress}}</td></tr>
+                <tr><td>Heartbeat</td><td>{{.CurrentRun.Heartbeat}}</td></tr>
+                <tr><td>Início</td><td>{{.CurrentRun.CreatedAt}}</td></tr>
+                {{if .CurrentRun.Error}}<tr><td>Erro</td><td>{{.CurrentRun.Error}}</td></tr>{{end}}
+              </tbody>
+            </table>
+            {{else}}
+            <p class="muted">Nenhuma execução registrada.</p>
+            {{end}}
+          </section>
+
+          <section class="card">
+            <h2>Ultimas execucoes</h2>
+            <p>Historico rapido para acompanhar operacao.</p>
+            <table>
+              <thead>
+                <tr><th>Run</th><th>Status</th><th>Criado em</th><th>Erro</th></tr>
+              </thead>
+              <tbody>
+              {{range .Runs}}
+                <tr>
+                  <td>#{{.ID}}</td>
+                  <td><span class="status-badge {{statusClass .Status}}">{{statusLabel .Status}}</span></td>
+                  <td>{{.CreatedAt}}</td>
+                  <td class="muted">{{.Error}}</td>
+                </tr>
+              {{else}}
+                <tr><td colspan="4" class="muted">Nenhuma execucao registrada.</td></tr>
+              {{end}}
+              </tbody>
+            </table>
+          </section>
+
+          <section class="card">
+            <h2>Resumo</h2>
+            <p>Estado atual da configuracao editorial.</p>
+            <table>
+              <tbody>
+                <tr><td>Categorias ativas</td><td>{{len .Categories}}</td></tr>
+                <tr><td>Feeds ativos</td><td>{{len .Feeds}}</td></tr>
+                <tr><td>Modelo</td><td>{{.Config.OpenAIModel}}</td></tr>
+                <tr><td>Timezone</td><td>{{.Config.Timezone}}</td></tr>
+                <tr><td>Timeout HTTP</td><td>{{seconds .Config.HTTPTimeout}}s</td></tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </section>
+
+      <section class="section {{if isActiveTab .ActiveTab "categorias"}}active{{end}}">
+        <div class="cards vertical">
+          <section class="card">
+            <h2 id="category-form-title">Nova categoria</h2>
+            <p>Crie novas seções editoriais com quota própria.</p>
+            <form id="category-form" method="post" action="/admin/categories/create" hx-post="/admin/categories/create" hx-target="#flash" hx-swap="innerHTML">
+              <input type="hidden" name="mode" value="create">
+              <div class="row inline-4">
+                <div>
+                  <label>Slug</label>
+                  <input name="slug" placeholder="ex: programacao">
+                </div>
+                <div>
+                  <label>Nome</label>
+                  <input name="name" placeholder="Exibicao no email">
+                </div>
+                <div>
+                  <label>Quota</label>
+                  <input name="item_quota" value="2">
+                </div>
+                <div>
+                  <label>Ordem</label>
+                  <input name="sort_order" value="10">
+                </div>
+              </div>
+              <label>Descricao</label>
+              <textarea name="description"></textarea>
+              <label><input type="checkbox" name="is_active" checked style="width:auto;margin-right:8px;">Categoria ativa</label>
+              <div class="actions">
+                <button id="category-form-submit" type="submit">Criar categoria</button>
+                <button id="category-form-cancel" type="button" class="ghost hidden" onclick="resetCategoryForm()">Cancelar edicao</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="card">
+            <h2>Categorias</h2>
+            <p>Cada categoria define uma trilha editorial e a cota de itens na newsletter.</p>
+            <table>
+              <thead>
+                <tr><th>Slug</th><th>Nome</th><th>Quota</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+              {{range .Categories}}
+                <tr>
+                  <td>{{.Slug}}</td>
+                  <td>{{.Name}}</td>
+                  <td>{{.ItemQuota}}</td>
+                  <td>{{if .IsActive}}ativa{{else}}inativa{{end}}</td>
+                  <td class="actions-cell">
+                    <button
+                      type="button"
+                      class="icon-button"
+                      title="Editar categoria"
+                      data-category-edit
+                      data-slug="{{.Slug}}"
+                      data-name="{{.Name}}"
+                      data-description="{{.Description}}"
+                      data-item-quota="{{.ItemQuota}}"
+                      data-sort-order="{{.SortOrder}}"
+                      data-is-active="{{if .IsActive}}true{{else}}false{{end}}"
+                    >✎</button>
+                    <form method="post" action="/admin/categories/delete" onsubmit="return confirm('Excluir categoria {{.Name}}?');">
+                      <input type="hidden" name="slug" value="{{.Slug}}">
+                      <button type="submit" class="secondary">Excluir</button>
+                    </form>
+                  </td>
+                </tr>
+              {{else}}
+                <tr><td colspan="5" class="muted">Nenhuma categoria cadastrada.</td></tr>
+              {{end}}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </section>
+
+      <section class="section {{if isActiveTab .ActiveTab "feeds"}}active{{end}}">
+        <div class="cards vertical">
+          <section class="card">
+            <h2 id="feed-form-title">Novo feed</h2>
+            <p>Cadastre uma nova fonte ligada a uma categoria.</p>
+            <form id="feed-form" method="post" action="/admin/feeds/create" hx-post="/admin/feeds/create" hx-target="#flash" hx-swap="innerHTML">
+              <input type="hidden" name="id" value="">
+              <input type="hidden" name="mode" value="create">
+              <div class="row inline-4">
+                <div>
+                  <label>Categoria</label>
+                  <input name="category_slug" placeholder="slug da categoria">
+                </div>
+                <div>
+                  <label>Nome da fonte</label>
+                  <input name="name" placeholder="Ex: GitHub Blog">
+                </div>
+                <div>
+                  <label>Dominio</label>
+                  <input name="site_domain" placeholder="Ex: github.blog">
+                </div>
+                <div>
+                  <label>Prioridade</label>
+                  <input name="priority" value="50">
+                </div>
+              </div>
+              <label>URL do feed</label>
+              <input name="url" placeholder="https://...">
+              <label><input type="checkbox" name="is_active" checked style="width:auto;margin-right:8px;">Feed ativo</label>
+              <div class="actions">
+                <button id="feed-form-submit" type="submit">Criar feed</button>
+                <button id="feed-form-cancel" type="button" class="ghost hidden" onclick="resetFeedForm()">Cancelar edicao</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="card">
+            <h2>Feeds cadastrados</h2>
+            <p>Associe cada RSS a uma categoria para guiar a curadoria desde a origem.</p>
+            <table>
+              <thead>
+                <tr><th>Categoria</th><th>Nome</th><th>Dominio</th><th>Prioridade</th><th></th></tr>
+              </thead>
+              <tbody>
+              {{range .Feeds}}
+                <tr>
+                  <td>{{.CategorySlug}}</td>
+                  <td>{{.Name}}</td>
+                  <td>{{.SiteDomain}}</td>
+                  <td>{{.Priority}}</td>
+                  <td class="actions-cell">
+                    <button
+                      type="button"
+                      class="icon-button"
+                      title="Editar feed"
+                      data-feed-edit
+                      data-id="{{.ID}}"
+                      data-category-slug="{{.CategorySlug}}"
+                      data-name="{{.Name}}"
+                      data-site-domain="{{.SiteDomain}}"
+                      data-priority="{{.Priority}}"
+                      data-url="{{.URL}}"
+                      data-is-active="{{if .IsActive}}true{{else}}false{{end}}"
+                    >✎</button>
+                    <form method="post" action="/admin/feeds/delete" onsubmit="return confirm('Excluir feed {{.Name}}?');">
+                      <input type="hidden" name="id" value="{{.ID}}">
+                      <button type="submit" class="secondary">Excluir</button>
+                    </form>
+                  </td>
+                </tr>
+              {{else}}
+                <tr><td colspan="5" class="muted">Nenhum feed cadastrado.</td></tr>
+              {{end}}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </section>
+
+      <section class="section {{if isActiveTab .ActiveTab "ia"}}active{{end}}">
+        <div class="cards">
+          <section class="card">
+            <h2>IA e Curadoria</h2>
+            <p>Modelo, volume final e pesos de ranking.</p>
+            <form hx-post="/admin/save/ai" hx-target="#flash" hx-swap="innerHTML">
+              <label>OpenAI API key</label>
+              <input name="openai_api_key" type="password" placeholder="Preencha para salvar ou rotacionar">
+              <div class="hint">Campo vazio preserva o valor criptografado atual.</div>
+              <div class="row">
+                <div>
+                  <label>Modelo OpenAI</label>
+                  <input name="openai_model" value="{{.Config.OpenAIModel}}">
+                </div>
+                <div>
+                  <label>Tamanho do chunk</label>
+                  <input name="curation_chunk_size" value="{{.Config.CurationChunkSize}}">
+                </div>
+                <div>
+                  <label>Peso target</label>
+                  <input name="weight_target" value="{{printf "%.2f" .Config.WeightTarget}}">
+                </div>
+                <div>
+                  <label>Peso relevancia</label>
+                  <input name="weight_relevance" value="{{printf "%.2f" .Config.WeightRelevance}}">
+                </div>
+                <div>
+                  <label>Peso novidade</label>
+                  <input name="weight_novelty" value="{{printf "%.2f" .Config.WeightNovelty}}">
+                </div>
+                <div>
+                  <label>Peso credibilidade</label>
+                  <input name="weight_credibility" value="{{printf "%.2f" .Config.WeightCredibility}}">
+                </div>
+              </div>
+              <div class="actions"><button type="submit">Salvar IA</button></div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="section {{if isActiveTab .ActiveTab "entrega"}}active{{end}}">
+        <div class="cards">
+          <section class="card">
+            <h2>Entrega</h2>
+            <p>Hosts, destinatarios e segredos de entrega ficam no banco, com criptografia para os campos sensiveis.</p>
+            <form hx-post="/admin/save/delivery" hx-target="#flash" hx-swap="innerHTML">
+              <div class="row">
+                <div>
+                  <label>SMTP host</label>
+                  <input name="smtp_host" value="{{.Config.SMTPHost}}">
+                </div>
+                <div>
+                  <label>SMTP port</label>
+                  <input name="smtp_port" value="{{.Config.SMTPPort}}">
+                </div>
+                <div>
+                  <label>SMTP user</label>
+                  <input name="smtp_user" value="{{.Config.SMTPUser}}">
+                </div>
+                <div>
+                  <label>Email from</label>
+                  <input name="email_from" value="{{.Config.EmailFrom}}">
+                </div>
+              </div>
+              <label>SMTP password</label>
+              <input name="smtp_pass" type="password" placeholder="Preencha para salvar ou rotacionar">
+              <div class="hint">Campo vazio preserva o valor criptografado atual.</div>
+              <label>Destinatarios de email</label>
+              <textarea name="email_to">{{joinLines .Config.EmailTo}}</textarea>
+              <label><input type="checkbox" name="telegram_enabled" {{if .Config.TelegramEnabled}}checked{{end}} style="width:auto;margin-right:8px;">Telegram habilitado</label>
+              <label>Telegram bot token</label>
+              <input name="telegram_bot_token" type="password" placeholder="Preencha para salvar ou rotacionar">
+              <div class="hint">Campo vazio preserva o valor criptografado atual.</div>
+              <label>Chat IDs do Telegram</label>
+              <textarea name="telegram_chat_ids">{{joinLines .Config.TelegramChatIDs}}</textarea>
+              <label><input type="checkbox" name="telegram_disable_web_preview" {{if .Config.TelegramDisablePreview}}checked{{end}} style="width:auto;margin-right:8px;">Desabilitar preview no Telegram</label>
+              <div class="actions"><button type="submit">Salvar entrega</button></div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="section {{if isActiveTab .ActiveTab "sistema"}}active{{end}}">
+        <div class="cards">
+          <section class="card">
+            <h2>Geral</h2>
+            <p>Parametros comuns de operacao e entrega.</p>
+            <form hx-post="/admin/save/general" hx-target="#flash" hx-swap="innerHTML">
+              <label>Timezone</label>
+              <input name="timezone" value="{{.Config.Timezone}}">
+              <label>Assunto base do email</label>
+              <input name="email_subject" value="{{.Config.EmailSubject}}">
+              <label>HTTP timeout em segundos</label>
+              <input name="http_timeout_seconds" value="{{seconds .Config.HTTPTimeout}}">
+              <div class="actions"><button type="submit">Salvar geral</button></div>
+            </form>
+          </section>
+
+          <section class="card">
+            <h2>Operacao</h2>
+            <p>Orientacoes de persistencia e backup.</p>
+            <table>
+              <tbody>
+                <tr><td>Banco</td><td>{{.Config.DatabasePath}}</td></tr>
+                <tr><td>Master key</td><td>data/master.key</td></tr>
+                <tr><td>Addr</td><td>{{.Config.ServerAddr}}</td></tr>
+              </tbody>
+            </table>
+            <p class="muted">Backup completo exige manter juntos o SQLite e a master key local do app.</p>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    function setFormMode(form, titleId, submitId, cancelId, config) {
+      form.action = config.action;
+      if (config.useHTMX) {
+        form.setAttribute("hx-post", config.action);
+      } else {
+        form.removeAttribute("hx-post");
+      }
+      form.querySelector('input[name="mode"]').value = config.mode;
+      document.getElementById(titleId).textContent = config.title;
+      document.getElementById(submitId).textContent = config.submitLabel;
+      document.getElementById(cancelId).classList.toggle("hidden", !config.editing);
+    }
+
+    function resetCategoryForm() {
+      const form = document.getElementById("category-form");
+      form.reset();
+      form.querySelector('input[name="slug"]').readOnly = false;
+      form.querySelector('input[name="slug"]').value = "";
+      form.querySelector('input[name="item_quota"]').value = "2";
+      form.querySelector('input[name="sort_order"]').value = "10";
+      form.querySelector('input[name="is_active"]').checked = true;
+      setFormMode(form, "category-form-title", "category-form-submit", "category-form-cancel", {
+        action: "/admin/categories/create",
+        mode: "create",
+        title: "Nova categoria",
+        submitLabel: "Criar categoria",
+        editing: false,
+        useHTMX: true
+      });
+    }
+
+    function resetFeedForm() {
+      const form = document.getElementById("feed-form");
+      form.reset();
+      form.querySelector('input[name="id"]').value = "";
+      form.querySelector('input[name="priority"]').value = "50";
+      form.querySelector('input[name="is_active"]').checked = true;
+      setFormMode(form, "feed-form-title", "feed-form-submit", "feed-form-cancel", {
+        action: "/admin/feeds/create",
+        mode: "create",
+        title: "Novo feed",
+        submitLabel: "Criar feed",
+        editing: false,
+        useHTMX: true
+      });
+    }
+
+    document.querySelectorAll("[data-category-edit]").forEach(function(button) {
+      button.addEventListener("click", function() {
+        const form = document.getElementById("category-form");
+        form.querySelector('input[name="slug"]').value = button.dataset.slug;
+        form.querySelector('input[name="slug"]').readOnly = true;
+        form.querySelector('input[name="name"]').value = button.dataset.name;
+        form.querySelector('textarea[name="description"]').value = button.dataset.description;
+        form.querySelector('input[name="item_quota"]').value = button.dataset.itemQuota;
+        form.querySelector('input[name="sort_order"]').value = button.dataset.sortOrder;
+        form.querySelector('input[name="is_active"]').checked = button.dataset.isActive === "true";
+        setFormMode(form, "category-form-title", "category-form-submit", "category-form-cancel", {
+          action: "/admin/categories/update",
+          mode: "update",
+          title: "Editar categoria",
+          submitLabel: "Atualizar categoria",
+          editing: true,
+          useHTMX: false
+        });
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    document.querySelectorAll("[data-feed-edit]").forEach(function(button) {
+      button.addEventListener("click", function() {
+        const form = document.getElementById("feed-form");
+        form.querySelector('input[name="id"]').value = button.dataset.id;
+        form.querySelector('input[name="category_slug"]').value = button.dataset.categorySlug;
+        form.querySelector('input[name="name"]').value = button.dataset.name;
+        form.querySelector('input[name="site_domain"]').value = button.dataset.siteDomain;
+        form.querySelector('input[name="priority"]').value = button.dataset.priority;
+        form.querySelector('input[name="url"]').value = button.dataset.url;
+        form.querySelector('input[name="is_active"]').checked = button.dataset.isActive === "true";
+        setFormMode(form, "feed-form-title", "feed-form-submit", "feed-form-cancel", {
+          action: "/admin/feeds/update",
+          mode: "update",
+          title: "Editar feed",
+          submitLabel: "Atualizar feed",
+          editing: true,
+          useHTMX: false
+        });
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  </script>
+</body>
+</html>

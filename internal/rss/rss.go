@@ -31,6 +31,14 @@ type Collector struct {
 }
 
 func (c Collector) Fetch(ctx context.Context, feeds []string) ([]model.RawItem, error) {
+	configs := make([]model.FeedConfig, 0, len(feeds))
+	for _, feedURL := range feeds {
+		configs = append(configs, model.FeedConfig{URL: feedURL, Name: feedURL})
+	}
+	return c.FetchConfigured(ctx, configs)
+}
+
+func (c Collector) FetchConfigured(ctx context.Context, feeds []model.FeedConfig) ([]model.RawItem, error) {
 	parser := gofeed.NewParser()
 	parser.Client = &http.Client{Timeout: c.HTTPTimeout}
 
@@ -41,14 +49,14 @@ func (c Collector) Fetch(ctx context.Context, feeds []string) ([]model.RawItem, 
 	}
 	results := make(chan result, len(feeds))
 
-	for _, feedURL := range feeds {
-		feedURL := feedURL
+	for _, feedCfg := range feeds {
+		feedCfg := feedCfg
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			feed, err := parser.ParseURLWithContext(feedURL, ctx)
+			feed, err := parser.ParseURLWithContext(feedCfg.URL, ctx)
 			if err != nil {
-				results <- result{err: fmt.Errorf("feed %s: %w", feedURL, err)}
+				results <- result{err: fmt.Errorf("feed %s: %w", feedCfg.URL, err)}
 				return
 			}
 			items := make([]model.RawItem, 0, min(c.MaxItemsPerFeed, len(feed.Items)))
@@ -56,7 +64,7 @@ func (c Collector) Fetch(ctx context.Context, feeds []string) ([]model.RawItem, 
 				if i >= c.MaxItemsPerFeed {
 					break
 				}
-				raw, ok := toRawItem(feedURL, it)
+				raw, ok := toRawItem(feedCfg, it)
 				if !ok {
 					continue
 				}
@@ -101,7 +109,7 @@ func (c Collector) Fetch(ctx context.Context, feeds []string) ([]model.RawItem, 
 	return combined, nil
 }
 
-func toRawItem(feedURL string, it *gofeed.Item) (model.RawItem, bool) {
+func toRawItem(feed model.FeedConfig, it *gofeed.Item) (model.RawItem, bool) {
 	u := normalizeURL(it.Link)
 	if u == "" {
 		return model.RawItem{}, false
@@ -123,10 +131,12 @@ func toRawItem(feedURL string, it *gofeed.Item) (model.RawItem, bool) {
 		URL:         it.Link,
 		URLNorm:     u,
 		Domain:      domain,
+		SourceName:  feed.Name,
 		ImageURL:    imageURL,
 		Summary:     truncate(summary, 420),
 		PublishedAt: published,
-		SourceFeed:  feedURL,
+		SourceFeed:  feed.URL,
+		Category:    feed.CategorySlug,
 		ItemHash:    fmt.Sprintf("%x", h[:]),
 	}, true
 }

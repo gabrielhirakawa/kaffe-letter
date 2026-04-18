@@ -18,6 +18,11 @@ type Payload struct {
 	Metrics model.RunMetrics
 }
 
+type section struct {
+	Title string
+	Items []model.CuratedItem
+}
+
 func BuildHTML(p Payload) (string, error) {
 	const tpl = `<!doctype html>
 <html lang="pt-BR">
@@ -25,7 +30,7 @@ func BuildHTML(p Payload) (string, error) {
 <body style="font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif; color:#111; line-height:1.5;">
   <h2>{{.Subject}}</h2>
   <p><strong>Data:</strong> {{.Now.Format "02/01/2006 15:04"}}</p>
-  <p>Top {{len .Items}} links do dia em tecnologia, programação e economia.</p>
+  <p>{{len .Items}} links selecionados em programação, tendências, leituras essenciais e economia.</p>
   <p><strong>Modelo:</strong> {{.Model}} | <strong>Tokens:</strong> prompt {{.Usage.PromptTokens}}, completion {{.Usage.CompletionTokens}}, total {{.Usage.TotalTokens}}</p>
   <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; margin:8px 0 16px 0; font-size:13px;">
     <tr><th align="left">Etapa</th><th align="right">Tempo</th></tr>
@@ -40,8 +45,10 @@ func BuildHTML(p Payload) (string, error) {
     <tr><td><strong>Total</strong></td><td align="right"><strong>{{ms .Metrics.TotalMS}}</strong></td></tr>
   </table>
   <hr/>
-  {{range $idx, $it := .Items}}
-    <h3 style="margin-bottom:6px;">{{$idx | add1}}. {{$it.TitlePTBR}}</h3>
+  {{range .Sections}}
+    <h3 style="margin:20px 0 10px 0;">{{.Title}}</h3>
+    {{range $idx, $it := .Items}}
+    <h4 style="margin-bottom:6px;">{{countryFlag $it.Domain}} {{$it.TitlePTBR}}</h4>
     {{if $it.ImageURL}}
     <p style="margin:6px 0;"><img src="{{$it.ImageURL}}" alt="{{$it.TitlePTBR}}" style="max-width:560px; width:100%; height:auto; border-radius:8px;" /></p>
     {{end}}
@@ -50,20 +57,28 @@ func BuildHTML(p Payload) (string, error) {
     <p style="margin:4px 0;"><a href="{{$it.URL}}" target="_blank" rel="noopener noreferrer">Ler fonte</a> • <small>{{$it.Domain}}</small></p>
     <p style="margin:2px 0;"><small>Título original: {{$it.TitleEN}}</small></p>
     <br/>
+    {{end}}
   {{end}}
 </body>
 </html>`
 
 	funcMap := template.FuncMap{
-		"add1": func(i int) int { return i + 1 },
-		"ms":   func(v int64) string { return fmt.Sprintf("%.2fs", float64(v)/1000.0) },
+		"ms":          func(v int64) string { return fmt.Sprintf("%.2fs", float64(v)/1000.0) },
+		"countryFlag": countryFlag,
 	}
 	t, err := template.New("newsletter").Funcs(funcMap).Parse(tpl)
 	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
-	if err := t.Execute(&b, p); err != nil {
+	view := struct {
+		Payload
+		Sections []section
+	}{
+		Payload:  p,
+		Sections: buildSections(p.Items),
+	}
+	if err := t.Execute(&b, view); err != nil {
 		return "", err
 	}
 	return b.String(), nil
@@ -85,16 +100,68 @@ func BuildText(p Payload) string {
 	b.WriteString(fmt.Sprintf("- Envio Telegram: %.2fs\n", float64(p.Metrics.TelegramMS)/1000.0))
 	b.WriteString(fmt.Sprintf("- Total: %.2fs\n\n", float64(p.Metrics.TotalMS)/1000.0))
 
-	for i, it := range p.Items {
-		b.WriteString(fmt.Sprintf("%d) %s\n", i+1, it.TitlePTBR))
-		b.WriteString(fmt.Sprintf("Resumo: %s\n", it.SummaryPTBR))
-		b.WriteString(fmt.Sprintf("Por que importa: %s\n", it.WhyItMattersPTBR))
-		b.WriteString(fmt.Sprintf("Título original: %s\n", it.TitleEN))
-		if strings.TrimSpace(it.ImageURL) != "" {
-			b.WriteString(fmt.Sprintf("Imagem: %s\n", it.ImageURL))
+	for _, sec := range buildSections(p.Items) {
+		b.WriteString(fmt.Sprintf("%s\n", sec.Title))
+		for i, it := range sec.Items {
+			b.WriteString(fmt.Sprintf("%d) %s %s\n", i+1, countryFlag(it.Domain), it.TitlePTBR))
+			b.WriteString(fmt.Sprintf("Resumo: %s\n", it.SummaryPTBR))
+			b.WriteString(fmt.Sprintf("Por que importa: %s\n", it.WhyItMattersPTBR))
+			b.WriteString(fmt.Sprintf("Título original: %s\n", it.TitleEN))
+			if strings.TrimSpace(it.ImageURL) != "" {
+				b.WriteString(fmt.Sprintf("Imagem: %s\n", it.ImageURL))
+			}
+			b.WriteString(fmt.Sprintf("Link: %s\n", it.URL))
+			b.WriteString("\n")
 		}
-		b.WriteString(fmt.Sprintf("Link: %s\n", it.URL))
-		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func buildSections(items []model.CuratedItem) []section {
+	order := []struct {
+		Key   string
+		Title string
+	}{
+		{Key: "programacao", Title: "Programação"},
+		{Key: "tendencias", Title: "Tendências"},
+		{Key: "leituras_essenciais", Title: "Leituras Essenciais"},
+		{Key: "economia", Title: "Economia"},
+	}
+
+	grouped := make(map[string][]model.CuratedItem, len(order))
+	for _, it := range items {
+		grouped[it.Category] = append(grouped[it.Category], it)
+	}
+
+	sections := make([]section, 0, len(order))
+	for _, item := range order {
+		if len(grouped[item.Key]) == 0 {
+			continue
+		}
+		sections = append(sections, section{
+			Title: item.Title,
+			Items: grouped[item.Key],
+		})
+	}
+	return sections
+}
+
+func countryFlag(domain string) string {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	switch {
+	case strings.Contains(domain, "ft.com"), strings.Contains(domain, "economist.com"), strings.Contains(domain, "wired.co.uk"):
+		return "🇬🇧"
+	case strings.Contains(domain, "nikkei.com"), strings.Contains(domain, "nikkei.co.jp"), strings.Contains(domain, "nikkeiasia.com"), strings.Contains(domain, "asia.nikkei.com"):
+		return "🇯🇵"
+	case strings.Contains(domain, "ieee.org"):
+		return "🇺🇸"
+	case strings.Contains(domain, "acm.org"):
+		return "🇺🇸"
+	case strings.Contains(domain, "martinfowler.com"):
+		return "🇺🇸"
+	case strings.Contains(domain, "github.blog"), strings.Contains(domain, "stackoverflow.blog"), strings.Contains(domain, "techcrunch.com"), strings.Contains(domain, "wired.com"), strings.Contains(domain, "theverge.com"), strings.Contains(domain, "infoq.com"), strings.Contains(domain, "arstechnica.com"), strings.Contains(domain, "ycombinator.com"), strings.Contains(domain, "hnrss.org"), strings.Contains(domain, "nytimes.com"):
+		return "🇺🇸"
+	default:
+		return "🌍"
+	}
 }

@@ -29,6 +29,7 @@ func NewService(cfg config.Config) Service {
 
 type candidate struct {
 	ID        int    `json:"id"`
+	Category  string `json:"category"`
 	Title     string `json:"title"`
 	URL       string `json:"url"`
 	Domain    string `json:"domain"`
@@ -39,6 +40,7 @@ type candidate struct {
 type aiResponse struct {
 	Items []struct {
 		CandidateID      int     `json:"candidate_id"`
+		Category         string  `json:"category"`
 		SummaryEN        string  `json:"summary_en"`
 		WhyItMattersEN   string  `json:"why_it_matters_en"`
 		RelevanceScore   float64 `json:"relevance_score"`
@@ -60,6 +62,7 @@ func (s Service) Curate(ctx context.Context, raw []model.RawItem) ([]model.Curat
 		id := i + 1
 		cand = append(cand, candidate{
 			ID:        id,
+			Category:  item.Category,
 			Title:     item.Title,
 			URL:       item.URL,
 			Domain:    item.Domain,
@@ -116,9 +119,14 @@ func (s Service) Curate(ctx context.Context, raw []model.RawItem) ([]model.Curat
 				whyEN = "Relevant update for professionals in technology and business."
 			}
 
+			category := normalizeCategory(a.Category)
+			if strings.TrimSpace(base.Category) != "" {
+				category = normalizeCategory(base.Category)
+			}
 			collected = append(collected, model.CuratedItem{
 				Title:            titleEN,
 				TitleEN:          titleEN,
+				Category:         category,
 				URL:              base.URL,
 				Domain:           base.Domain,
 				ImageURL:         base.ImageURL,
@@ -319,13 +327,18 @@ func buildCurationPrompt(cfg config.Config, items []candidate) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf(`
-You are curating a daily newsletter for technology, programming, and economics.
+You are curating a daily newsletter with four editorial sections:
+- programacao
+- tendencias
+- leituras_essenciais
+- economia
 
 Target keywords: %s
 Target domains: %s
 
 For EACH item, return JSON in field "items" with:
 - candidate_id (int)
+- category (should usually preserve the provided category unless the item is clearly miscategorized)
 - summary_en (max 240 chars)
 - why_it_matters_en (1 sentence, max 180 chars)
 - relevance_score (0-100)
@@ -339,6 +352,21 @@ Do not invent facts. Return ONLY valid JSON.
 Items:
 %s
 `, strings.Join(cfg.TargetKeywords, ", "), strings.Join(cfg.TargetDomains, ", "), string(data)), nil
+}
+
+func normalizeCategory(s string) string {
+	switch strings.TrimSpace(strings.ToLower(s)) {
+	case "programacao":
+		return "programacao"
+	case "tendencias":
+		return "tendencias"
+	case "leituras_essenciais":
+		return "leituras_essenciais"
+	case "economia":
+		return "economia"
+	default:
+		return "tendencias"
+	}
 }
 
 func clamp(v float64) float64 {

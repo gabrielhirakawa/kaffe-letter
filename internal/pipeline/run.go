@@ -16,6 +16,7 @@ import (
 	"rss-ai-newsletter/internal/render"
 	"rss-ai-newsletter/internal/rss"
 	"rss-ai-newsletter/internal/store"
+	"rss-ai-newsletter/internal/telegram"
 )
 
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
@@ -119,9 +120,10 @@ func RunDaily(ctx context.Context, cfg config.Config) error {
 		loc = time.UTC
 	}
 	subject := fmt.Sprintf("%s - %s", cfg.EmailSubject, time.Now().In(loc).Format("02/01/2006"))
-	renderMS, sendMS, err := sendNewsletter(cfg, subject, time.Now().In(loc), curated, usage, metrics)
+	renderMS, sendMS, telegramMS, err := sendNewsletter(cfg, subject, time.Now().In(loc), curated, usage, metrics)
 	metrics.RenderMS = renderMS
 	metrics.SendMS = sendMS
+	metrics.TelegramMS = telegramMS
 	metrics.TotalMS = time.Since(runStart).Milliseconds()
 	if err != nil {
 		_ = st.SaveDelivery(ctx, runID, "failed", err.Error(), len(cfg.EmailTo))
@@ -173,7 +175,7 @@ func Resend(ctx context.Context, cfg config.Config, runID int64, latest bool) er
 		loc = time.UTC
 	}
 	subject := fmt.Sprintf("REENVIO [%d] %s - %s", runID, cfg.EmailSubject, time.Now().In(loc).Format("02/01/2006"))
-	if _, _, err := sendNewsletter(cfg, subject, time.Now().In(loc), items, model.TokenUsage{}, metrics); err != nil {
+	if _, _, _, err := sendNewsletter(cfg, subject, time.Now().In(loc), items, model.TokenUsage{}, metrics); err != nil {
 		_ = st.SaveDelivery(ctx, runID, "resend_failed", err.Error(), len(cfg.EmailTo))
 		return err
 	}
@@ -182,21 +184,32 @@ func Resend(ctx context.Context, cfg config.Config, runID int64, latest bool) er
 	return nil
 }
 
-func sendNewsletter(cfg config.Config, subject string, now time.Time, items []model.CuratedItem, usage model.TokenUsage, metrics model.RunMetrics) (int64, int64, error) {
+func sendNewsletter(cfg config.Config, subject string, now time.Time, items []model.CuratedItem, usage model.TokenUsage, metrics model.RunMetrics) (int64, int64, int64, error) {
 	payload := render.Payload{Subject: subject, Now: now, Items: items, Usage: usage, Model: cfg.OpenAIModel, Metrics: metrics}
 	tRender := time.Now()
 	htmlBody, err := render.BuildHTML(payload)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	textBody := render.BuildText(payload)
 	renderMS := time.Since(tRender).Milliseconds()
 	sender := email.Sender{Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Pass: cfg.SMTPPass, From: cfg.EmailFrom}
 	tSend := time.Now()
 	if err := sender.Send(cfg.EmailTo, subject, textBody, htmlBody); err != nil {
-		return renderMS, time.Since(tSend).Milliseconds(), err
+		return renderMS, time.Since(tSend).Milliseconds(), 0, err
 	}
-	return renderMS, time.Since(tSend).Milliseconds(), nil
+	sendMS := time.Since(tSend).Milliseconds()
+
+	telegramMS := int64(0)
+	if cfg.TelegramEnabled {
+		tg := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramDisablePreview, cfg.HTTPTimeout)
+		tTg := time.Now()
+		if err := tg.SendDigest(context.Background(), cfg.TelegramChatIDs, subject, now, items, usage, metrics); err != nil {
+			return renderMS, sendMS, time.Since(tTg).Milliseconds(), err
+		}
+		telegramMS = time.Since(tTg).Milliseconds()
+	}
+	return renderMS, sendMS, telegramMS, nil
 }
 
 func normalizeForEmail(items []model.CuratedItem) []model.CuratedItem {
@@ -205,6 +218,7 @@ func normalizeForEmail(items []model.CuratedItem) []model.CuratedItem {
 		it.Title = cleanText(it.Title)
 		it.TitleEN = cleanText(it.TitleEN)
 		it.TitlePTBR = cleanText(it.TitlePTBR)
+		it.ImageURL = strings.TrimSpace(it.ImageURL)
 		it.SummaryEN = cleanText(it.SummaryEN)
 		it.SummaryPTBR = cleanText(it.SummaryPTBR)
 		it.WhyItMattersEN = cleanText(it.WhyItMattersEN)

@@ -121,6 +121,7 @@ func (s Service) Curate(ctx context.Context, raw []model.RawItem) ([]model.Curat
 				TitleEN:          titleEN,
 				URL:              base.URL,
 				Domain:           base.Domain,
+				ImageURL:         base.ImageURL,
 				SummaryEN:        summaryEN,
 				WhyItMattersEN:   whyEN,
 				RelevanceScore:   clamp(a.RelevanceScore),

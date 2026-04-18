@@ -54,6 +54,7 @@ func (s *Store) migrate() error {
 			url TEXT NOT NULL,
 			url_norm TEXT NOT NULL,
 			domain TEXT NOT NULL,
+			image_url TEXT,
 			summary TEXT,
 			published_at DATETIME,
 			source_feed TEXT,
@@ -70,6 +71,7 @@ func (s *Store) migrate() error {
 			title_pt_br TEXT NOT NULL,
 			url TEXT NOT NULL,
 			domain TEXT NOT NULL,
+			image_url TEXT,
 			summary_en TEXT NOT NULL,
 			summary_pt_br TEXT NOT NULL,
 			why_it_matters_en TEXT NOT NULL,
@@ -103,6 +105,7 @@ func (s *Store) migrate() error {
 			persist_ms INTEGER NOT NULL,
 			render_ms INTEGER NOT NULL,
 			send_ms INTEGER NOT NULL,
+			telegram_ms INTEGER NOT NULL DEFAULT 0,
 			total_ms INTEGER NOT NULL,
 			created_at DATETIME NOT NULL,
 			FOREIGN KEY(run_id) REFERENCES runs(id)
@@ -123,10 +126,19 @@ func (s *Store) migrate() error {
 	if err := s.ensureColumn("items_curated", "summary_en", "TEXT"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("items_raw", "image_url", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("items_curated", "image_url", "TEXT"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("items_curated", "why_it_matters_en", "TEXT"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("items_curated", "why_it_matters_pt_br", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("run_metrics", "telegram_ms", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	return nil
@@ -190,8 +202,8 @@ func (s *Store) SaveRawItems(ctx context.Context, runID int64, items []model.Raw
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT OR IGNORE INTO items_raw
-		(run_id, title, url, url_norm, domain, summary, published_at, source_feed, item_hash, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(run_id, title, url, url_norm, domain, image_url, summary, published_at, source_feed, item_hash, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -201,7 +213,7 @@ func (s *Store) SaveRawItems(ctx context.Context, runID int64, items []model.Raw
 	now := time.Now().UTC()
 	for _, it := range items {
 		if _, err := stmt.ExecContext(ctx,
-			runID, it.Title, it.URL, it.URLNorm, it.Domain, it.Summary, it.PublishedAt, it.SourceFeed, it.ItemHash, now,
+			runID, it.Title, it.URL, it.URLNorm, it.Domain, it.ImageURL, it.Summary, it.PublishedAt, it.SourceFeed, it.ItemHash, now,
 		); err != nil {
 			return fmt.Errorf("insert raw item: %w", err)
 		}
@@ -218,8 +230,8 @@ func (s *Store) SaveCuratedItems(ctx context.Context, runID int64, items []model
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO items_curated
-		(run_id, title, title_en, title_pt_br, url, domain, summary_en, summary_pt_br, why_it_matters_en, why_it_matters_pt_br, relevance_score, novelty_score, credibility_score, target_match, target_reason, final_score, rank_position, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(run_id, title, title_en, title_pt_br, url, domain, image_url, summary_en, summary_pt_br, why_it_matters_en, why_it_matters_pt_br, relevance_score, novelty_score, credibility_score, target_match, target_reason, final_score, rank_position, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return err
@@ -241,7 +253,7 @@ func (s *Store) SaveCuratedItems(ctx context.Context, runID int64, items []model
 			target = 1
 		}
 		if _, err := stmt.ExecContext(ctx,
-			runID, it.Title, it.TitleEN, it.TitlePTBR, it.URL, it.Domain, it.SummaryEN, it.SummaryPTBR, it.WhyItMattersEN, it.WhyItMattersPTBR,
+			runID, it.Title, it.TitleEN, it.TitlePTBR, it.URL, it.Domain, it.ImageURL, it.SummaryEN, it.SummaryPTBR, it.WhyItMattersEN, it.WhyItMattersPTBR,
 			it.RelevanceScore, it.NoveltyScore, it.CredibilityScore, target, it.TargetReason,
 			it.FinalScore, i+1, now,
 		); err != nil {
@@ -262,8 +274,8 @@ func (s *Store) SaveDelivery(ctx context.Context, runID int64, status, errMsg st
 func (s *Store) SaveRunMetrics(ctx context.Context, runID int64, m model.RunMetrics) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO run_metrics
-		(run_id, rss_ms, curation_ms, translation_ms, normalize_ms, persist_ms, render_ms, send_ms, total_ms, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(run_id, rss_ms, curation_ms, translation_ms, normalize_ms, persist_ms, render_ms, send_ms, telegram_ms, total_ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(run_id) DO UPDATE SET
 			rss_ms=excluded.rss_ms,
 			curation_ms=excluded.curation_ms,
@@ -272,17 +284,18 @@ func (s *Store) SaveRunMetrics(ctx context.Context, runID int64, m model.RunMetr
 			persist_ms=excluded.persist_ms,
 			render_ms=excluded.render_ms,
 			send_ms=excluded.send_ms,
+			telegram_ms=excluded.telegram_ms,
 			total_ms=excluded.total_ms
-	`, runID, m.RSSMS, m.CurationMS, m.TranslationMS, m.NormalizeMS, m.PersistMS, m.RenderMS, m.SendMS, m.TotalMS, time.Now().UTC())
+	`, runID, m.RSSMS, m.CurationMS, m.TranslationMS, m.NormalizeMS, m.PersistMS, m.RenderMS, m.SendMS, m.TelegramMS, m.TotalMS, time.Now().UTC())
 	return err
 }
 
 func (s *Store) GetRunMetrics(ctx context.Context, runID int64) (model.RunMetrics, error) {
 	var m model.RunMetrics
 	err := s.db.QueryRowContext(ctx, `
-		SELECT rss_ms, curation_ms, translation_ms, normalize_ms, persist_ms, render_ms, send_ms, total_ms
+		SELECT rss_ms, curation_ms, translation_ms, normalize_ms, persist_ms, render_ms, send_ms, COALESCE(telegram_ms, 0), total_ms
 		FROM run_metrics WHERE run_id = ?
-	`, runID).Scan(&m.RSSMS, &m.CurationMS, &m.TranslationMS, &m.NormalizeMS, &m.PersistMS, &m.RenderMS, &m.SendMS, &m.TotalMS)
+	`, runID).Scan(&m.RSSMS, &m.CurationMS, &m.TranslationMS, &m.NormalizeMS, &m.PersistMS, &m.RenderMS, &m.SendMS, &m.TelegramMS, &m.TotalMS)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return model.RunMetrics{}, nil
@@ -312,6 +325,7 @@ func (s *Store) GetCuratedItemsByRunID(ctx context.Context, runID int64) ([]mode
 			COALESCE(title_pt_br, ''),
 			COALESCE(url, ''),
 			COALESCE(domain, ''),
+			COALESCE(image_url, ''),
 			COALESCE(summary_en, ''),
 			COALESCE(summary_pt_br, ''),
 			COALESCE(why_it_matters_en, ''),
@@ -336,6 +350,7 @@ func (s *Store) GetCuratedItemsByRunID(ctx context.Context, runID int64) ([]mode
 			&it.TitlePTBR,
 			&it.URL,
 			&it.Domain,
+			&it.ImageURL,
 			&it.SummaryEN,
 			&it.SummaryPTBR,
 			&it.WhyItMattersEN,

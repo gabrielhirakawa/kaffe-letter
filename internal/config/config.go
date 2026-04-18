@@ -35,14 +35,18 @@ type Config struct {
 
 	Timezone string
 
-	SMTPURL      string
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUser     string
-	SMTPPass     string
-	EmailFrom    string
-	EmailTo      []string
-	EmailSubject string
+	SMTPURL                string
+	SMTPHost               string
+	SMTPPort               int
+	SMTPUser               string
+	SMTPPass               string
+	EmailFrom              string
+	EmailTo                []string
+	EmailSubject           string
+	TelegramEnabled        bool
+	TelegramBotToken       string
+	TelegramChatIDs        []string
+	TelegramDisablePreview bool
 
 	DatabasePath string
 	LogLevel     string
@@ -78,14 +82,18 @@ func Load() (Config, error) {
 
 		Timezone: getEnv("TIMEZONE", "America/Sao_Paulo"),
 
-		SMTPURL:      getEnv("SMTP_URL", ""),
-		SMTPHost:     getEnv("SMTP_HOST", "smtp.gmail.com"),
-		SMTPPort:     mustInt("SMTP_PORT", 587),
-		SMTPUser:     getEnv("SMTP_USER", ""),
-		SMTPPass:     getEnv("SMTP_PASS", ""),
-		EmailFrom:    getEnv("EMAIL_FROM", ""),
-		EmailTo:      splitCSV(getEnv("EMAIL_TO", "")),
-		EmailSubject: getEnv("EMAIL_SUBJECT", "Newsletter diária de tecnologia, programação e economia"),
+		SMTPURL:                getEnv("SMTP_URL", ""),
+		SMTPHost:               getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:               mustInt("SMTP_PORT", 587),
+		SMTPUser:               getEnv("SMTP_USER", ""),
+		SMTPPass:               getEnv("SMTP_PASS", ""),
+		EmailFrom:              getEnv("EMAIL_FROM", ""),
+		EmailTo:                splitCSV(getEnv("EMAIL_TO", "")),
+		EmailSubject:           getEnv("EMAIL_SUBJECT", "Newsletter diária de tecnologia, programação e economia"),
+		TelegramEnabled:        mustBool("TELEGRAM_ENABLED", false),
+		TelegramBotToken:       getEnv("TELEGRAM_BOT_TOKEN", ""),
+		TelegramChatIDs:        splitCSV(getEnv("TELEGRAM_CHAT_IDS", "")),
+		TelegramDisablePreview: mustBool("TELEGRAM_DISABLE_WEB_PREVIEW", true),
 
 		DatabasePath: getEnv("DATABASE_PATH", "./data/newsletter.db"),
 		LogLevel:     getEnv("LOG_LEVEL", "info"),
@@ -107,6 +115,14 @@ func Load() (Config, error) {
 	}
 	if cfg.SMTPHost == "" || cfg.SMTPPort <= 0 || cfg.SMTPUser == "" || cfg.SMTPPass == "" {
 		return cfg, fmt.Errorf("SMTP config is required (use SMTP_URL or SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS)")
+	}
+	if cfg.TelegramEnabled {
+		if strings.TrimSpace(cfg.TelegramBotToken) == "" {
+			return cfg, fmt.Errorf("TELEGRAM_BOT_TOKEN is required when TELEGRAM_ENABLED=true")
+		}
+		if len(cfg.TelegramChatIDs) == 0 {
+			return cfg, fmt.Errorf("TELEGRAM_CHAT_IDS is required when TELEGRAM_ENABLED=true")
+		}
 	}
 	return cfg, nil
 }

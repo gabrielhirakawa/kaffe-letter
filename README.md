@@ -1,12 +1,13 @@
 # RSS AI Newsletter (Go)
 
-Newsletter diária em PT-BR com curadoria por IA (`gpt-5-nano` por padrão), baseada em feeds RSS, com envio por e-mail.
+Newsletter diária em PT-BR com curadoria por IA (`gpt-5-nano` por padrão), baseada em feeds RSS, com envio por e-mail e opcionalmente Telegram.
 
 ## Stack
 - Go 1.22
 - SQLite (persistência local)
 - OpenAI Chat Completions API
 - SMTP para envio
+- Telegram Bot API (opcional)
 - Docker (arm64 para Raspberry Pi 5)
 
 ## Como rodar localmente
@@ -44,6 +45,7 @@ Exemplo no host (Raspberry Pi):
 ## Variáveis principais
 - `OPENAI_MODEL` (default: `gpt-5-nano`)
 - `SMTP_URL` (ex.: `smtp://usuario:senha@host:587`)
+- `TELEGRAM_ENABLED`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS`
 - `CURATION_CHUNK_SIZE` (ex.: `15`, reduz timeout em lotes grandes)
 - `CANDIDATE_POOL_SIZE` (quantos candidatos entram na curadoria)
 - `RSS_FEEDS`
@@ -65,7 +67,7 @@ traduz título, resumo e “por que importa” dos itens finais.
 6. **Validação bilíngue obrigatória**:
 só prossegue se cada item tiver campos EN + PT-BR preenchidos.
 7. **Persistência + envio**:
-salva no SQLite, renderiza HTML/texto e envia por SMTP.
+salva no SQLite, renderiza HTML/texto, envia por SMTP e opcionalmente Telegram.
 
 ## Estratégia Atual
 - **Sem fallback de idioma**:
@@ -74,6 +76,8 @@ se curadoria/tradução falhar, a execução falha e não envia.
 usa exclusivamente o conteúdo já salvo no SQLite.
 - **Bilíngue persistido**:
 cada item final guarda versão EN e PT-BR.
+- **Imagens por notícia (quando disponíveis)**:
+extraídas de `media:content`/`media:thumbnail`, `enclosure` ou `<img>` na descrição/conteúdo do RSS.
 
 ## Gargalo Esperado
 - O maior custo de tempo tende a estar em `curation_ms`:

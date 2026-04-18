@@ -36,11 +36,15 @@ func BuildHTML(p Payload) (string, error) {
     <tr><td>Persistência</td><td align="right">{{ms .Metrics.PersistMS}}</td></tr>
     <tr><td>Render</td><td align="right">{{ms .Metrics.RenderMS}}</td></tr>
     <tr><td>Envio SMTP</td><td align="right">{{ms .Metrics.SendMS}}</td></tr>
+    <tr><td>Envio Telegram</td><td align="right">{{ms .Metrics.TelegramMS}}</td></tr>
     <tr><td><strong>Total</strong></td><td align="right"><strong>{{ms .Metrics.TotalMS}}</strong></td></tr>
   </table>
   <hr/>
   {{range $idx, $it := .Items}}
     <h3 style="margin-bottom:6px;">{{$idx | add1}}. {{$it.TitlePTBR}}</h3>
+    {{if $it.ImageURL}}
+    <p style="margin:6px 0;"><img src="{{$it.ImageURL}}" alt="{{$it.TitlePTBR}}" style="max-width:560px; width:100%; height:auto; border-radius:8px;" /></p>
+    {{end}}
     <p style="margin:4px 0;"><em>{{$it.SummaryPTBR}}</em></p>
     <p style="margin:4px 0;">Por que importa: {{$it.WhyItMattersPTBR}}</p>
     <p style="margin:4px 0;"><a href="{{$it.URL}}" target="_blank" rel="noopener noreferrer">Ler fonte</a> • <small>{{$it.Domain}}</small></p>
@@ -78,6 +82,7 @@ func BuildText(p Payload) string {
 	b.WriteString(fmt.Sprintf("- Persistência: %.2fs\n", float64(p.Metrics.PersistMS)/1000.0))
 	b.WriteString(fmt.Sprintf("- Render: %.2fs\n", float64(p.Metrics.RenderMS)/1000.0))
 	b.WriteString(fmt.Sprintf("- Envio SMTP: %.2fs\n", float64(p.Metrics.SendMS)/1000.0))
+	b.WriteString(fmt.Sprintf("- Envio Telegram: %.2fs\n", float64(p.Metrics.TelegramMS)/1000.0))
 	b.WriteString(fmt.Sprintf("- Total: %.2fs\n\n", float64(p.Metrics.TotalMS)/1000.0))
 
 	for i, it := range p.Items {
@@ -85,6 +90,9 @@ func BuildText(p Payload) string {
 		b.WriteString(fmt.Sprintf("Resumo: %s\n", it.SummaryPTBR))
 		b.WriteString(fmt.Sprintf("Por que importa: %s\n", it.WhyItMattersPTBR))
 		b.WriteString(fmt.Sprintf("Título original: %s\n", it.TitleEN))
+		if strings.TrimSpace(it.ImageURL) != "" {
+			b.WriteString(fmt.Sprintf("Imagem: %s\n", it.ImageURL))
+		}
 		b.WriteString(fmt.Sprintf("Link: %s\n", it.URL))
 		b.WriteString("\n")
 	}

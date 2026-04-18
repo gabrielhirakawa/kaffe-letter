@@ -19,6 +19,7 @@ import (
 )
 
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
+var imgSrcRe = regexp.MustCompile(`(?i)<img[^>]+src=["']([^"']+)["']`)
 
 type Collector struct {
 	HTTPTimeout     time.Duration
@@ -111,6 +112,7 @@ func toRawItem(feedURL string, it *gofeed.Item) (model.RawItem, bool) {
 		return model.RawItem{}, false
 	}
 	summary := sanitizeSummary(it.Description)
+	imageURL := extractImageURL(it)
 	published := time.Now().UTC()
 	if it.PublishedParsed != nil {
 		published = it.PublishedParsed.UTC()
@@ -121,6 +123,7 @@ func toRawItem(feedURL string, it *gofeed.Item) (model.RawItem, bool) {
 		URL:         it.Link,
 		URLNorm:     u,
 		Domain:      domain,
+		ImageURL:    imageURL,
 		Summary:     truncate(summary, 420),
 		PublishedAt: published,
 		SourceFeed:  feedURL,
@@ -133,6 +136,91 @@ func sanitizeSummary(s string) string {
 	s = htmlTagRe.ReplaceAllString(s, " ")
 	s = stripNewlines(s)
 	return strings.TrimSpace(s)
+}
+
+func extractImageURL(it *gofeed.Item) string {
+	if it == nil {
+		return ""
+	}
+	if it.Image != nil {
+		if u := sanitizeImageURL(it.Image.URL); u != "" {
+			return u
+		}
+	}
+	for _, enc := range it.Enclosures {
+		if u := sanitizeImageURL(enc.URL); u != "" && isImageType(enc.Type, enc.URL) {
+			return u
+		}
+	}
+	if u := firstImageFromHTML(it.Content); u != "" {
+		return u
+	}
+	if u := firstImageFromHTML(it.Description); u != "" {
+		return u
+	}
+	if mediaURL := firstMediaURLFromExtensions(it); mediaURL != "" {
+		return mediaURL
+	}
+	return ""
+}
+
+func firstImageFromHTML(htmlText string) string {
+	if strings.TrimSpace(htmlText) == "" {
+		return ""
+	}
+	m := imgSrcRe.FindStringSubmatch(htmlText)
+	if len(m) < 2 {
+		return ""
+	}
+	return sanitizeImageURL(m[1])
+}
+
+func firstMediaURLFromExtensions(it *gofeed.Item) string {
+	if it.Extensions == nil {
+		return ""
+	}
+	for namespace, groups := range it.Extensions {
+		if !strings.EqualFold(namespace, "media") {
+			continue
+		}
+		for tag, entries := range groups {
+			if !strings.EqualFold(tag, "content") && !strings.EqualFold(tag, "thumbnail") {
+				continue
+			}
+			for _, entry := range entries {
+				if u := sanitizeImageURL(entry.Attrs["url"]); u != "" {
+					return u
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func sanitizeImageURL(raw string) string {
+	raw = strings.TrimSpace(html.UnescapeString(raw))
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return ""
+	}
+	u.Fragment = ""
+	return u.String()
+}
+
+func isImageType(contentType, urlValue string) bool {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if strings.HasPrefix(ct, "image/") {
+		return true
+	}
+	l := strings.ToLower(urlValue)
+	return strings.Contains(l, ".jpg") || strings.Contains(l, ".jpeg") || strings.Contains(l, ".png") || strings.Contains(l, ".webp") || strings.Contains(l, ".gif")
 }
 
 func normalizeURL(raw string) string {

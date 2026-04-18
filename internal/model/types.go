@@ -7,6 +7,7 @@ type RawItem struct {
 	URL         string
 	URLNorm     string
 	Domain      string
+	ImageURL    string
 	Summary     string
 	PublishedAt time.Time
 	SourceFeed  string
@@ -20,6 +21,7 @@ type CuratedItem struct {
 	TitlePTBR        string
 	URL              string
 	Domain           string
+	ImageURL         string
 	SummaryEN        string
 	SummaryPTBR      string
 	WhyItMattersEN   string
@@ -52,5 +54,6 @@ type RunMetrics struct {
 	PersistMS     int64
 	RenderMS      int64
 	SendMS        int64
+	TelegramMS    int64
 	TotalMS       int64
 }

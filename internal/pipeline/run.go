@@ -185,6 +185,9 @@ func Resend(ctx context.Context, cfg config.Config, runID int64, latest bool) er
 }
 
 func sendNewsletter(cfg config.Config, subject string, now time.Time, items []model.CuratedItem, usage model.TokenUsage, metrics model.RunMetrics) (int64, int64, int64, error) {
+	if metrics.TotalMS == 0 {
+		metrics.TotalMS = metrics.RSSMS + metrics.CurationMS + metrics.TranslationMS + metrics.NormalizeMS + metrics.PersistMS + metrics.RenderMS + metrics.SendMS + metrics.TelegramMS
+	}
 	payload := render.Payload{Subject: subject, Now: now, Items: items, Usage: usage, Model: cfg.OpenAIModel, Metrics: metrics}
 	tRender := time.Now()
 	htmlBody, err := render.BuildHTML(payload)

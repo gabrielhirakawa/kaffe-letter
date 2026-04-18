@@ -7,3 +7,5 @@ logs/
 *.sqlite
 
 newsletter
+
+.cache/

@@ -79,7 +79,11 @@ func RunDaily(ctx context.Context, cfg config.Config) error {
 	}
 	metrics.PersistMS += time.Since(tPersistStart).Milliseconds()
 
-	curationSvc := curation.NewService(cfg)
+	curationSvc, err := curation.NewService(cfg)
+	if err != nil {
+		finish("failed", err.Error())
+		return err
+	}
 	t1 := time.Now()
 	progress("curation", fmt.Sprintf("Curando %d candidatos com IA", len(raw)))
 	curated, usageCurate, err := curationSvc.Curate(ctx, raw)
@@ -207,7 +211,7 @@ func sendNewsletter(cfg config.Config, subject string, now time.Time, items []mo
 	if metrics.TotalMS == 0 {
 		metrics.TotalMS = metrics.RSSMS + metrics.CurationMS + metrics.TranslationMS + metrics.NormalizeMS + metrics.PersistMS + metrics.RenderMS + metrics.SendMS + metrics.TelegramMS
 	}
-	payload := render.Payload{Subject: subject, Now: now, Items: items, Usage: usage, Model: cfg.OpenAIModel, Metrics: metrics}
+	payload := render.Payload{Subject: subject, Now: now, Items: items, Usage: usage, Model: fmt.Sprintf("%s / %s", cfg.LLMProvider, cfg.LLMModel), Metrics: metrics}
 	tRender := time.Now()
 	htmlBody, err := render.BuildHTML(payload)
 	if err != nil {

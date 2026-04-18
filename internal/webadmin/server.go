@@ -84,7 +84,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		CurrentRun:     currentRun,
 		ActiveTab:      normalizeTab(r.URL.Query().Get("tab")),
 		SMTPPassSet:    strings.TrimSpace(cfg.SMTPPass) != "",
-		OpenAIKeySet:   strings.TrimSpace(cfg.OpenAIAPIKey) != "",
+		LLMKeySet:      strings.TrimSpace(cfg.LLMAPIKey) != "",
 		TelegramKeySet: strings.TrimSpace(cfg.TelegramBotToken) != "",
 	}
 	if err := pageTemplate.Execute(w, data); err != nil {
@@ -135,8 +135,10 @@ func (s *Server) handleSaveAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	values := map[string]string{
-		"openai_api_key":      r.FormValue("openai_api_key"),
-		"openai_model":        r.FormValue("openai_model"),
+		"llm_api_key":         r.FormValue("llm_api_key"),
+		"llm_provider":        r.FormValue("llm_provider"),
+		"llm_model":           r.FormValue("llm_model"),
+		"llm_base_url":        r.FormValue("llm_base_url"),
 		"curation_chunk_size": r.FormValue("curation_chunk_size"),
 		"weight_relevance":    r.FormValue("weight_relevance"),
 		"weight_novelty":      r.FormValue("weight_novelty"),
@@ -458,7 +460,7 @@ func writeFlash(w http.ResponseWriter, message string) {
 }
 
 func encryptSensitiveValues(cryptoSvc secure.Service, values, existing map[string]string) error {
-	for _, key := range []string{"openai_api_key", "smtp_pass", "telegram_bot_token"} {
+	for _, key := range []string{"llm_api_key", "smtp_pass", "telegram_bot_token"} {
 		raw := strings.TrimSpace(values[key])
 		if raw == "" {
 			if current, ok := existing[key]; ok {
@@ -483,7 +485,7 @@ type dashboardView struct {
 	CurrentRun     runView
 	ActiveTab      string
 	SMTPPassSet    bool
-	OpenAIKeySet   bool
+	LLMKeySet      bool
 	TelegramKeySet bool
 }
 

@@ -17,9 +17,10 @@ import (
 )
 
 type Config struct {
-	OpenAIAPIKey string
-	OpenAIModel  string
-	OpenAIURL    string
+	LLMProvider string
+	LLMAPIKey   string
+	LLMModel    string
+	LLMBaseURL  string
 
 	Categories        []model.CategoryConfig
 	Feeds             []model.FeedConfig
@@ -68,8 +69,9 @@ func Load() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		OpenAIModel: "gpt-5-nano",
-		OpenAIURL:   "https://api.openai.com/v1/chat/completions",
+		LLMProvider: "openai",
+		LLMModel:    "gpt-5-nano",
+		LLMBaseURL:  "https://api.openai.com/v1",
 
 		Categories:        defaultCategories(),
 		Feeds:             defaultFeedConfigs(),
@@ -112,8 +114,18 @@ func Load() (Config, error) {
 }
 
 func (cfg Config) ValidateRuntime() error {
-	if cfg.OpenAIAPIKey == "" {
-		return fmt.Errorf("openai_api_key is required")
+	switch strings.ToLower(strings.TrimSpace(cfg.LLMProvider)) {
+	case "", "openai", "anthropic", "gemini":
+		if strings.TrimSpace(cfg.LLMAPIKey) == "" {
+			return fmt.Errorf("llm_api_key is required for provider=%s", defaultIfEmpty(cfg.LLMProvider, "openai"))
+		}
+	case "local":
+		// local providers may run without a key if the endpoint is open
+	default:
+		return fmt.Errorf("unsupported llm_provider: %s", cfg.LLMProvider)
+	}
+	if strings.TrimSpace(cfg.LLMModel) == "" {
+		return fmt.Errorf("llm_model is required")
 	}
 	if cfg.EmailFrom == "" {
 		return fmt.Errorf("email_from is required")
@@ -184,8 +196,10 @@ func overlayPersistedSettings(ctx context.Context, cfg *Config) error {
 	}
 
 	defaults := map[string]string{
-		"openai_model":                 cfg.OpenAIModel,
-		"openai_api_key":               "",
+		"llm_provider":                 cfg.LLMProvider,
+		"llm_model":                    cfg.LLMModel,
+		"llm_base_url":                 cfg.LLMBaseURL,
+		"llm_api_key":                  "",
 		"rss_feeds":                    strings.Join(cfg.RSSFeeds, "\n"),
 		"max_items_per_feed":           strconv.Itoa(cfg.MaxItemsPerFeed),
 		"max_items_total":              strconv.Itoa(cfg.MaxItemsTotal),
@@ -259,11 +273,25 @@ func overlayPersistedSettings(ctx context.Context, cfg *Config) error {
 			return err
 		}
 	}
-	cfg.OpenAIAPIKey, err = cryptoSvc.Decrypt(getString(values, "openai_api_key", ""))
+	cfg.LLMAPIKey, err = cryptoSvc.Decrypt(firstNonEmpty(values, "llm_api_key", "openai_api_key"))
 	if err != nil {
-		return fmt.Errorf("decrypt openai_api_key: %w", err)
+		return fmt.Errorf("decrypt llm_api_key: %w", err)
 	}
-	cfg.OpenAIModel = getString(values, "openai_model", cfg.OpenAIModel)
+	cfg.LLMProvider = getString(values, "llm_provider", defaultIfEmpty(cfg.LLMProvider, "openai"))
+	cfg.LLMModel = getString(values, "llm_model", cfg.LLMModel)
+	cfg.LLMBaseURL = getString(values, "llm_base_url", cfg.LLMBaseURL)
+	if cfg.LLMModel == "" {
+		cfg.LLMModel = getString(values, "openai_model", cfg.LLMModel)
+	}
+	if cfg.LLMAPIKey == "" {
+		cfg.LLMAPIKey, err = cryptoSvc.Decrypt(getString(values, "openai_api_key", ""))
+		if err != nil {
+			return fmt.Errorf("decrypt openai_api_key: %w", err)
+		}
+	}
+	if cfg.LLMBaseURL == "" {
+		cfg.LLMBaseURL = getString(values, "openai_url", cfg.LLMBaseURL)
+	}
 	cfg.RSSFeeds = splitLines(getString(values, "rss_feeds", strings.Join(cfg.RSSFeeds, "\n")))
 	cfg.MaxItemsPerFeed = parseInt(getString(values, "max_items_per_feed", ""), cfg.MaxItemsPerFeed)
 	cfg.MaxItemsTotal = parseInt(getString(values, "max_items_total", ""), cfg.MaxItemsTotal)
@@ -306,6 +334,15 @@ func applyBootstrapEnvDefaults(defaults map[string]string, cryptoSvc secure.Serv
 			defaults[key] = value
 		}
 	}
+	setStringFallback := func(key, primaryEnv, fallbackEnv string) {
+		if value := strings.TrimSpace(os.Getenv(primaryEnv)); value != "" {
+			defaults[key] = value
+			return
+		}
+		if value := strings.TrimSpace(os.Getenv(fallbackEnv)); value != "" {
+			defaults[key] = value
+		}
+	}
 	setLines := func(key, envName string) {
 		if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
 			defaults[key] = strings.Join(splitLines(value), "\n")
@@ -324,6 +361,29 @@ func applyBootstrapEnvDefaults(defaults map[string]string, cryptoSvc secure.Serv
 		return nil
 	}
 
+	setString("llm_provider", "LLM_PROVIDER")
+	setStringFallback("llm_model", "LLM_MODEL", "OPENAI_MODEL")
+	setStringFallback("llm_base_url", "LLM_BASE_URL", "OPENAI_URL")
+	if err := func() error {
+		if value := strings.TrimSpace(os.Getenv("LLM_API_KEY")); value != "" {
+			encrypted, err := cryptoSvc.Encrypt(value)
+			if err != nil {
+				return err
+			}
+			defaults["llm_api_key"] = encrypted
+			return nil
+		}
+		if value := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); value != "" {
+			encrypted, err := cryptoSvc.Encrypt(value)
+			if err != nil {
+				return err
+			}
+			defaults["llm_api_key"] = encrypted
+		}
+		return nil
+	}(); err != nil {
+		return err
+	}
 	setString("openai_model", "OPENAI_MODEL")
 	if err := setSecret("openai_api_key", "OPENAI_API_KEY"); err != nil {
 		return err
@@ -359,6 +419,22 @@ func applyBootstrapEnvDefaults(defaults map[string]string, cryptoSvc secure.Serv
 	setString("weight_target", "WEIGHT_TARGET")
 	setString("max_per_domain", "MAX_PER_DOMAIN")
 	return nil
+}
+
+func firstNonEmpty(values map[string]string, keys ...string) string {
+	for _, key := range keys {
+		if v := strings.TrimSpace(values[key]); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func defaultIfEmpty(v, fallback string) string {
+	if strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	return v
 }
 
 func MasterKeyPath(databasePath string) string {

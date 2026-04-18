@@ -7,7 +7,7 @@
 ## What It Does
 
 - Feeds: Ingests RSS feeds chosen and assigned by the user into configurable editorial buckets.
-- AI: Curates stories with OpenAI and generates PT-BR + EN content.
+- AI: Curates stories with a configurable LLM provider and generates PT-BR + EN content.
 - Delivery: Sends a daily digest by SMTP and optionally Telegram.
 - Storage: Persists runs, items, metrics and settings locally in SQLite.
 - Observability: Includes token usage and per-step timing in the generated email.
@@ -64,8 +64,10 @@ Bootstrap variables:
 - `LOG_LEVEL`
 - `TIMEZONE`
 - `HTTP_TIMEOUT_SECONDS`
-- `OPENAI_MODEL`
-- `OPENAI_API_KEY`
+- `LLM_PROVIDER`
+- `LLM_MODEL`
+- `LLM_BASE_URL`
+- `LLM_API_KEY`
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USER`
@@ -81,6 +83,8 @@ Bootstrap variables:
 Notes:
 
 - `.env` is optional and useful for local or headless bootstrap.
+- `LLM_PROVIDER` accepts `openai`, `anthropic`, `gemini` or `local`.
+- `LLM_BASE_URL` is mainly useful for local or OpenAI-compatible endpoints.
 - Sensitive values are encrypted before being written to SQLite.
 - The local master key is stored at `data/master.key`.
 - Editorial settings and feed buckets are managed in the admin after bootstrap.
@@ -124,7 +128,7 @@ flowchart LR
 
 - `cmd/newsletter`: CLI entrypoint.
 - `internal/config`: runtime config and persisted settings.
-- `internal/curation`: OpenAI calls and editorial scoring.
+- `internal/curation`: LLM calls and editorial scoring.
 - `internal/email`: SMTP delivery.
 - `internal/render`: HTML and text rendering.
 - `internal/rss`: feed collection and normalization.

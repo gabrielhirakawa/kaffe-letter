@@ -1,30 +1,35 @@
 package curation
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
 
 	"kaffe-letter/internal/config"
+	"kaffe-letter/internal/llm"
 	"kaffe-letter/internal/model"
 )
 
 type Service struct {
-	cfg        config.Config
-	httpClient *http.Client
+	cfg    config.Config
+	client llm.Provider
 }
 
-func NewService(cfg config.Config) Service {
-	return Service{
-		cfg:        cfg,
-		httpClient: &http.Client{Timeout: cfg.HTTPTimeout},
+func NewService(cfg config.Config) (Service, error) {
+	client, err := llm.New(llm.Config{
+		Provider:    cfg.LLMProvider,
+		Model:       cfg.LLMModel,
+		BaseURL:     cfg.LLMBaseURL,
+		APIKey:      cfg.LLMAPIKey,
+		HTTPTimeout: cfg.HTTPTimeout,
+	})
+	if err != nil {
+		return Service{}, err
 	}
+	return Service{cfg: cfg, client: client}, nil
 }
 
 type candidate struct {
@@ -89,11 +94,18 @@ func (s Service) Curate(ctx context.Context, raw []model.RawItem) ([]model.Curat
 		if err != nil {
 			return nil, totalUsage, err
 		}
-		res, usage, err := s.callOpenAIForCuration(ctx, payloadText)
+		content, usage, err := s.callStructuredJSON(ctx,
+			"Você é um editor técnico rigoroso. Responda APENAS JSON válido.",
+			payloadText)
 		if err != nil {
 			return nil, totalUsage, err
 		}
 		totalUsage.Add(usage)
+
+		var res aiResponse
+		if err := json.Unmarshal([]byte(content), &res); err != nil {
+			return nil, totalUsage, fmt.Errorf("parse curation json: %w content=%s", err, content)
+		}
 
 		for _, a := range res.Items {
 			base, ok := idx[a.CandidateID]
@@ -187,22 +199,11 @@ Itens:
 %s
 `, string(b))
 
-		reqBody := map[string]any{
-			"model":           s.cfg.OpenAIModel,
-			"response_format": map[string]any{"type": "json_object"},
-			"messages": []map[string]string{
-				{
-					"role":    "system",
-					"content": "Você traduz conteúdo técnico para PT-BR com fidelidade.",
-				},
-				{
-					"role":    "user",
-					"content": prompt,
-				},
-			},
-		}
-
-		content, usage, err := s.callOpenAIContent(ctx, reqBody)
+		content, usage, err := s.callStructuredJSON(
+			ctx,
+			"Você traduz conteúdo técnico para PT-BR com fidelidade. Responda APENAS JSON válido.",
+			prompt,
+		)
 		if err != nil {
 			return items, totalUsage, err
 		}
@@ -240,85 +241,11 @@ Itens:
 	return items, totalUsage, nil
 }
 
-func (s Service) callOpenAIForCuration(ctx context.Context, prompt string) (aiResponse, model.TokenUsage, error) {
-	reqBody := map[string]any{
-		"model":           s.cfg.OpenAIModel,
-		"response_format": map[string]any{"type": "json_object"},
-		"messages": []map[string]string{
-			{
-				"role":    "system",
-				"content": "Você é um editor técnico rigoroso. Responda APENAS JSON válido.",
-			},
-			{
-				"role":    "user",
-				"content": prompt,
-			},
-		},
+func (s Service) callStructuredJSON(ctx context.Context, systemPrompt, userPrompt string) (string, model.TokenUsage, error) {
+	if s.client == nil {
+		return "", model.TokenUsage{}, fmt.Errorf("llm provider is not configured")
 	}
-	content, usage, err := s.callOpenAIContent(ctx, reqBody)
-	if err != nil {
-		return aiResponse{}, usage, err
-	}
-
-	var out aiResponse
-	if err := json.Unmarshal([]byte(content), &out); err != nil {
-		return aiResponse{}, usage, fmt.Errorf("parse curation json: %w content=%s", err, content)
-	}
-	return out, usage, nil
-}
-
-func (s Service) callOpenAIContent(ctx context.Context, reqBody map[string]any) (string, model.TokenUsage, error) {
-	b, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", model.TokenUsage{}, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.OpenAIURL, bytes.NewReader(b))
-	if err != nil {
-		return "", model.TokenUsage{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+s.cfg.OpenAIAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return "", model.TokenUsage{}, err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return "", model.TokenUsage{}, fmt.Errorf("openai status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var chat struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		} `json:"usage"`
-	}
-	if err := json.Unmarshal(body, &chat); err != nil {
-		return "", model.TokenUsage{}, fmt.Errorf("parse chat completion: %w", err)
-	}
-	if len(chat.Choices) == 0 {
-		return "", model.TokenUsage{}, fmt.Errorf("openai returned no choices")
-	}
-	content := strings.TrimSpace(chat.Choices[0].Message.Content)
-	if content == "" {
-		return "", model.TokenUsage{}, fmt.Errorf("openai returned empty content")
-	}
-	usage := model.TokenUsage{
-		PromptTokens:     chat.Usage.PromptTokens,
-		CompletionTokens: chat.Usage.CompletionTokens,
-		TotalTokens:      chat.Usage.TotalTokens,
-	}
-	return content, usage, nil
+	return s.client.Complete(ctx, systemPrompt, userPrompt)
 }
 
 func buildCurationPrompt(cfg config.Config, items []candidate) (string, error) {

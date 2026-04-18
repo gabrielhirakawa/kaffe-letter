@@ -26,7 +26,7 @@
       </nav>
 
       <div class="status">
-        <div class="pill"><span class="state-icon {{if .OpenAIKeySet}}ok{{else}}warn{{end}}">{{if .OpenAIKeySet}}✓{{else}}!{{end}}</span>OpenAI key: {{if .OpenAIKeySet}}configurada{{else}}nao configurada{{end}}</div>
+        <div class="pill"><span class="state-icon {{if .LLMKeySet}}ok{{else}}warn{{end}}">{{if .LLMKeySet}}✓{{else}}!{{end}}</span>LLM key: {{if .LLMKeySet}}configurada{{else}}nao configurada{{end}}</div>
         <div class="pill"><span class="state-icon {{if .SMTPPassSet}}ok{{else}}warn{{end}}">{{if .SMTPPassSet}}✓{{else}}!{{end}}</span>SMTP pass: {{if .SMTPPassSet}}configurada{{else}}nao configurada{{end}}</div>
         <div class="pill"><span class="state-icon {{if .TelegramKeySet}}ok{{else}}warn{{end}}">{{if .TelegramKeySet}}✓{{else}}!{{end}}</span>Telegram token: {{if .TelegramKeySet}}configurado{{else}}nao configurado{{end}}</div>
       </div>
@@ -93,7 +93,7 @@
               <tbody>
                 <tr><td>Categorias ativas</td><td>{{len .Categories}}</td></tr>
                 <tr><td>Feeds ativos</td><td>{{len .Feeds}}</td></tr>
-                <tr><td>Modelo</td><td>{{.Config.OpenAIModel}}</td></tr>
+                <tr><td>LLM</td><td>{{.Config.LLMProvider}} / {{.Config.LLMModel}}</td></tr>
                 <tr><td>Timezone</td><td>{{.Config.Timezone}}</td></tr>
                 <tr><td>Timeout HTTP</td><td>{{seconds .Config.HTTPTimeout}}s</td></tr>
               </tbody>
@@ -264,13 +264,24 @@
             <h2>IA e Curadoria</h2>
             <p>Modelo, volume final e pesos de ranking.</p>
             <form hx-post="/admin/save/ai" hx-target="#flash" hx-swap="innerHTML">
-              <label>OpenAI API key</label>
-              <input name="openai_api_key" type="password" placeholder="Preencha para salvar ou rotacionar">
+              <label>LLM provider</label>
+              <select name="llm_provider">
+                <option value="openai" {{if eq .Config.LLMProvider "openai"}}selected{{end}}>OpenAI</option>
+                <option value="anthropic" {{if eq .Config.LLMProvider "anthropic"}}selected{{end}}>Anthropic</option>
+                <option value="gemini" {{if eq .Config.LLMProvider "gemini"}}selected{{end}}>Gemini</option>
+                <option value="local" {{if eq .Config.LLMProvider "local"}}selected{{end}}>Local</option>
+              </select>
+              <label>LLM API key</label>
+              <input name="llm_api_key" type="password" placeholder="Preencha para salvar ou rotacionar">
               <div class="hint">Campo vazio preserva o valor criptografado atual.</div>
               <div class="row">
                 <div>
-                  <label>Modelo OpenAI</label>
-                  <input name="openai_model" value="{{.Config.OpenAIModel}}">
+                  <label>Modelo</label>
+                  <input name="llm_model" value="{{.Config.LLMModel}}">
+                </div>
+                <div>
+                  <label>Base URL</label>
+                  <input name="llm_base_url" value="{{.Config.LLMBaseURL}}">
                 </div>
                 <div>
                   <label>Tamanho do chunk</label>

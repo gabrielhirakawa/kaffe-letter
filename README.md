@@ -49,8 +49,7 @@ go run ./cmd/newsletter --mode server
 To build and run with Docker:
 
 ```bash
-docker compose build
-docker compose run --rm newsletter
+docker compose up -d
 ```
 
 ## Containers
@@ -59,7 +58,8 @@ docker compose run --rm newsletter
 
 - `Dockerfile` builds a small Go binary for the application.
 - `docker-compose.yml` is the recommended self-hosted entrypoint for local and production-like runs.
-- `.env` remains useful for bootstrap, especially on headless servers.
+- `.env` is optional and only used if you want bootstrap values in a file.
+- The default container command is `server`, so `docker compose up -d` starts the admin UI.
 - The app persists state in SQLite, so the container only needs a mounted data directory.
 - In production, the common pattern is cron or a scheduler invoking the newsletter container once per day.
 

@@ -4,8 +4,10 @@ services:
       context: .
       dockerfile: Dockerfile
     image: kaffe-letter:latest
+    command: ["--mode", "server"]
     env_file:
-      - .env
+      - path: .env
+        required: false
     volumes:
       - ./data:/app/data
     restart: "no"

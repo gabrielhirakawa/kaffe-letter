@@ -97,6 +97,7 @@ func (s *Store) migrate() error {
 			error_message TEXT,
 			current_stage TEXT,
 			progress_message TEXT,
+			issue_title TEXT,
 			last_heartbeat_at DATETIME,
 			created_at DATETIME NOT NULL,
 			finished_at DATETIME
@@ -206,6 +207,9 @@ func (s *Store) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("runs", "progress_message", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("runs", "issue_title", "TEXT"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("runs", "last_heartbeat_at", "DATETIME"); err != nil {
@@ -544,8 +548,8 @@ func (s *Store) UpsertSettings(ctx context.Context, values map[string]string) er
 
 func (s *Store) StartRun(ctx context.Context) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO runs(status, current_stage, progress_message, last_heartbeat_at, created_at) VALUES(?, ?, ?, ?, ?)`,
-		"running", "starting", "Inicializando execução", time.Now().UTC(), time.Now().UTC(),
+		`INSERT INTO runs(status, current_stage, progress_message, issue_title, last_heartbeat_at, created_at) VALUES(?, ?, ?, ?, ?, ?)`,
+		"running", "starting", "Inicializando execução", "", time.Now().UTC(), time.Now().UTC(),
 	)
 	if err != nil {
 		return 0, err
@@ -557,6 +561,14 @@ func (s *Store) FinishRun(ctx context.Context, runID int64, status, errMsg strin
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE runs SET status=?, error_message=?, current_stage=?, progress_message=?, last_heartbeat_at=?, finished_at=? WHERE id=?`,
 		status, nullIfEmpty(errMsg), status, nullIfEmpty(errMsg), time.Now().UTC(), time.Now().UTC(), runID,
+	)
+	return err
+}
+
+func (s *Store) UpdateRunIssueTitle(ctx context.Context, runID int64, title string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE runs SET issue_title=? WHERE id=?`,
+		strings.TrimSpace(title), runID,
 	)
 	return err
 }
@@ -698,7 +710,7 @@ func (s *Store) ListRecentRuns(ctx context.Context, limit int) ([]model.RunSumma
 		limit = 20
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, status, COALESCE(error_message, ''), COALESCE(current_stage, ''), COALESCE(progress_message, ''), COALESCE(last_heartbeat_at, created_at), created_at, COALESCE(finished_at, created_at)
+		SELECT id, status, COALESCE(error_message, ''), COALESCE(current_stage, ''), COALESCE(progress_message, ''), COALESCE(issue_title, ''), COALESCE(last_heartbeat_at, created_at), created_at, COALESCE(finished_at, created_at)
 		FROM runs
 		ORDER BY id DESC
 		LIMIT ?
@@ -714,7 +726,7 @@ func (s *Store) ListRecentRuns(ctx context.Context, limit int) ([]model.RunSumma
 		var heartbeatAt string
 		var createdAt string
 		var finishedAt string
-		if err := rows.Scan(&item.ID, &item.Status, &item.ErrorMessage, &item.CurrentStage, &item.ProgressMsg, &heartbeatAt, &createdAt, &finishedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Status, &item.ErrorMessage, &item.CurrentStage, &item.ProgressMsg, &item.IssueTitle, &heartbeatAt, &createdAt, &finishedAt); err != nil {
 			return nil, err
 		}
 		item.HeartbeatAt = parseSQLiteTime(heartbeatAt)
@@ -734,11 +746,33 @@ func (s *Store) GetCurrentRun(ctx context.Context) (model.RunSummary, error) {
 	var createdAt string
 	var finishedAt string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, status, COALESCE(error_message, ''), COALESCE(current_stage, ''), COALESCE(progress_message, ''), COALESCE(last_heartbeat_at, created_at), created_at, COALESCE(finished_at, created_at)
+		SELECT id, status, COALESCE(error_message, ''), COALESCE(current_stage, ''), COALESCE(progress_message, ''), COALESCE(issue_title, ''), COALESCE(last_heartbeat_at, created_at), created_at, COALESCE(finished_at, created_at)
 		FROM runs
 		ORDER BY id DESC
 		LIMIT 1
-	`).Scan(&item.ID, &item.Status, &item.ErrorMessage, &item.CurrentStage, &item.ProgressMsg, &heartbeatAt, &createdAt, &finishedAt)
+	`).Scan(&item.ID, &item.Status, &item.ErrorMessage, &item.CurrentStage, &item.ProgressMsg, &item.IssueTitle, &heartbeatAt, &createdAt, &finishedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.RunSummary{}, nil
+		}
+		return model.RunSummary{}, err
+	}
+	item.HeartbeatAt = parseSQLiteTime(heartbeatAt)
+	item.CreatedAt = parseSQLiteTime(createdAt)
+	item.FinishedAt = parseSQLiteTime(finishedAt)
+	return item, nil
+}
+
+func (s *Store) GetRunByID(ctx context.Context, runID int64) (model.RunSummary, error) {
+	var item model.RunSummary
+	var heartbeatAt string
+	var createdAt string
+	var finishedAt string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, status, COALESCE(error_message, ''), COALESCE(current_stage, ''), COALESCE(progress_message, ''), COALESCE(issue_title, ''), COALESCE(last_heartbeat_at, created_at), created_at, COALESCE(finished_at, created_at)
+		FROM runs
+		WHERE id = ?
+	`, runID).Scan(&item.ID, &item.Status, &item.ErrorMessage, &item.CurrentStage, &item.ProgressMsg, &item.IssueTitle, &heartbeatAt, &createdAt, &finishedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return model.RunSummary{}, nil

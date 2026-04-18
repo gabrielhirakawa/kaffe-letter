@@ -67,6 +67,7 @@ type RunSummary struct {
 	ErrorMessage string
 	CurrentStage string
 	ProgressMsg  string
+	IssueTitle   string
 	HeartbeatAt  time.Time
 	CreatedAt    time.Time
 	FinishedAt   time.Time

@@ -15,7 +15,7 @@
 
 ## Engine Controls
 
-These editorial controls shape the curation engine, not credentials:
+These editorial controls shape the curation engine
 
 - 🎯 Candidate pool before AI curation.
 - 🧺 Final issue size after ranking and selection.
@@ -72,28 +72,29 @@ There are two ways to bootstrap `kaffe-letter`:
 
 Optional bootstrap variables:
 
-| Variable | Purpose | Notes |
-| --- | --- | --- |
-| `DATABASE_PATH` | SQLite file location | Defaults to `./data/newsletter.db` |
-| `SERVER_ADDR` | Admin server bind address | Defaults to `:8080` |
-| `LOG_LEVEL` | Runtime logging level | Defaults to `info` |
-| `TIMEZONE` | Newsletter scheduling timezone | Defaults to `America/Sao_Paulo` |
-| `HTTP_TIMEOUT_SECONDS` | Timeout for feeds and LLM calls | Defaults to `20` |
-| `LLM_PROVIDER` | LLM backend selector | Accepts `openai`, `anthropic`, `gemini` or `local` |
-| `LLM_MODEL` | Model name | Example: `gpt-5-nano` |
-| `LLM_BASE_URL` | Custom endpoint for local/OpenAI-compatible providers | Mostly useful for `local` |
-| `LLM_API_KEY` | LLM credential | Optional for some local setups |
-| `SMTP_HOST` | SMTP server hostname | Required only if you use email delivery |
-| `SMTP_PORT` | SMTP server port | Required only if you use email delivery |
-| `SMTP_USER` | SMTP username | Required only if you use email delivery |
-| `SMTP_PASS` | SMTP password | Sensitive value, encrypted in SQLite |
-| `EMAIL_FROM` | Sender email address | Required only if you use email delivery |
-| `EMAIL_TO` | Newsletter recipients | One or more addresses |
-| `EMAIL_SUBJECT` | Email subject template | Defaults to a daily newsletter subject |
-| `TELEGRAM_ENABLED` | Telegram delivery toggle | `true` or `false` |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot credential | Sensitive value, encrypted in SQLite |
-| `TELEGRAM_CHAT_IDS` | Telegram destinations | One or more chat IDs |
-| `TELEGRAM_DISABLE_WEB_PREVIEW` | Disable link previews in Telegram | Defaults to `true` |
+| Variable                       | Purpose                                               | Notes                                              |
+| ------------------------------ | ----------------------------------------------------- | -------------------------------------------------- |
+| `DATABASE_PATH`                | SQLite file location                                  | Defaults to `./data/newsletter.db`                 |
+| `SERVER_ADDR`                  | Admin server bind address                             | Defaults to `:8080`                                |
+| `LOG_LEVEL`                    | Runtime logging level                                 | Defaults to `info`                                 |
+| `TIMEZONE`                     | Newsletter scheduling timezone                        | Defaults to `America/Sao_Paulo`                    |
+| `DELIVERY_TIME`                | Daily delivery time in the chosen timezone           | Defaults to `07:00`                                |
+| `HTTP_TIMEOUT_SECONDS`         | Timeout for feeds and LLM calls                       | Defaults to `20`                                   |
+| `LLM_PROVIDER`                 | LLM backend selector                                  | Accepts `openai`, `anthropic`, `gemini` or `local` |
+| `LLM_MODEL`                    | Model name                                            | Example: `gpt-5-nano`                              |
+| `LLM_BASE_URL`                 | Custom endpoint for local/OpenAI-compatible providers | Mostly useful for `local`                          |
+| `LLM_API_KEY`                  | LLM credential                                        | Optional for some local setups                     |
+| `SMTP_HOST`                    | SMTP server hostname                                  | Required only if you use email delivery            |
+| `SMTP_PORT`                    | SMTP server port                                      | Required only if you use email delivery            |
+| `SMTP_USER`                    | SMTP username                                         | Required only if you use email delivery            |
+| `SMTP_PASS`                    | SMTP password                                         | Sensitive value, encrypted in SQLite               |
+| `EMAIL_FROM`                   | Sender email address                                  | Required only if you use email delivery            |
+| `EMAIL_TO`                     | Newsletter recipients                                 | One or more addresses                              |
+| `EMAIL_SUBJECT`                | Email subject template                                | Defaults to a daily newsletter subject             |
+| `TELEGRAM_ENABLED`             | Telegram delivery toggle                              | `true` or `false`                                  |
+| `TELEGRAM_BOT_TOKEN`           | Telegram bot credential                               | Sensitive value, encrypted in SQLite               |
+| `TELEGRAM_CHAT_IDS`            | Telegram destinations                                 | One or more chat IDs                               |
+| `TELEGRAM_DISABLE_WEB_PREVIEW` | Disable link previews in Telegram                     | Defaults to `true`                                 |
 
 Notes:
 

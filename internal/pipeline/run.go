@@ -128,6 +128,14 @@ func RunDaily(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	metrics.NormalizeMS = time.Since(t3).Milliseconds()
+	issueTitle, titleErr := curationSvc.GenerateIssueTitle(ctx, curated)
+	if titleErr != nil {
+		issueTitle = buildFallbackIssueTitle(curated)
+	}
+	if err := st.UpdateRunIssueTitle(ctx, runID, issueTitle); err != nil {
+		finish("failed", err.Error())
+		return err
+	}
 	tPersistStart = time.Now()
 	progress("persist_curated", fmt.Sprintf("Persistindo %d itens curados", len(curated)))
 	if err := st.SaveCuratedItems(ctx, runID, curated); err != nil {
@@ -140,7 +148,7 @@ func RunDaily(ctx context.Context, cfg config.Config) error {
 	if lerr != nil {
 		loc = time.UTC
 	}
-	subject := fmt.Sprintf("%s - %s", cfg.EmailSubject, time.Now().In(loc).Format("02/01/2006"))
+	subject := buildSubject(issueTitle, time.Now().In(loc), false)
 	progress("delivery", "Renderizando e enviando newsletter")
 	renderMS, sendMS, telegramMS, err := sendNewsletter(cfg, subject, time.Now().In(loc), curated, usage, metrics)
 	metrics.RenderMS = renderMS
@@ -192,12 +200,20 @@ func Resend(ctx context.Context, cfg config.Config, runID int64, latest bool) er
 	if err != nil {
 		return err
 	}
+	runSummary, err := st.GetRunByID(ctx, runID)
+	if err != nil {
+		return err
+	}
 
 	loc, lerr := time.LoadLocation(cfg.Timezone)
 	if lerr != nil {
 		loc = time.UTC
 	}
-	subject := fmt.Sprintf("REENVIO [%d] %s - %s", runID, cfg.EmailSubject, time.Now().In(loc).Format("02/01/2006"))
+	issueTitle := strings.TrimSpace(runSummary.IssueTitle)
+	if issueTitle == "" {
+		issueTitle = buildFallbackIssueTitle(items)
+	}
+	subject := buildSubject(issueTitle, time.Now().In(loc), true)
 	if _, _, _, err := sendNewsletter(cfg, subject, time.Now().In(loc), items, model.TokenUsage{}, metrics); err != nil {
 		_ = st.SaveDelivery(ctx, runID, "resend_failed", err.Error(), len(cfg.EmailTo))
 		return err
@@ -436,4 +452,71 @@ func toSet(items []string) map[string]struct{} {
 		}
 	}
 	return m
+}
+
+func buildFallbackIssueTitle(items []model.CuratedItem) string {
+	if len(items) == 0 {
+		return "Edição diária"
+	}
+	seen := map[string]struct{}{}
+	labels := make([]string, 0, 4)
+	for _, it := range items {
+		label := normalizeCategoryTitle(it.Category)
+		if label == "" {
+			continue
+		}
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		labels = append(labels, label)
+		if len(labels) == 4 {
+			break
+		}
+	}
+	if len(labels) == 0 {
+		return "Edição diária"
+	}
+	return joinHumanList(labels)
+}
+
+func normalizeCategoryTitle(s string) string {
+	switch normalizeCategoryLabel(s) {
+	case "programacao":
+		return "Programação"
+	case "tendencias":
+		return "Tendências"
+	case "leituras_essenciais":
+		return "Leituras Essenciais"
+	case "economia":
+		return "Economia"
+	default:
+		return ""
+	}
+}
+
+func joinHumanList(items []string) string {
+	switch len(items) {
+	case 0:
+		return ""
+	case 1:
+		return items[0]
+	case 2:
+		return items[0] + " e " + items[1]
+	default:
+		return strings.Join(items[:len(items)-1], ", ") + " e " + items[len(items)-1]
+	}
+}
+
+func buildSubject(issueTitle string, now time.Time, resend bool) string {
+	issueTitle = strings.TrimSpace(issueTitle)
+	date := now.Format("02/01/2006")
+	if issueTitle == "" {
+		issueTitle = "Edição diária"
+	}
+	prefix := "Kaffe-letter"
+	if resend {
+		prefix = "Kaffe-letter - Reenvio"
+	}
+	return fmt.Sprintf("%s · %s · %s", prefix, issueTitle, date)
 }

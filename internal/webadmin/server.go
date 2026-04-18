@@ -121,12 +121,22 @@ func (s *Server) handleSaveGeneral(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	deliveryTime := strings.TrimSpace(r.FormValue("delivery_time"))
+	if deliveryTime != "" {
+		tm, err := time.Parse("15:04", deliveryTime)
+		if err != nil {
+			http.Error(w, "delivery_time deve usar formato HH:MM", http.StatusBadRequest)
+			return
+		}
+		deliveryTime = tm.Format("15:04")
+	}
 	values := map[string]string{
 		"timezone":             r.FormValue("timezone"),
+		"delivery_time":        deliveryTime,
 		"email_subject":        r.FormValue("email_subject"),
 		"http_timeout_seconds": r.FormValue("http_timeout_seconds"),
 	}
-	s.saveSettings(w, r, values, "Configuracoes gerais salvas.")
+	s.saveSettings(w, r, values, "Configurações gerais salvas.")
 }
 
 func (s *Server) handleSaveAI(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +155,7 @@ func (s *Server) handleSaveAI(w http.ResponseWriter, r *http.Request) {
 		"weight_credibility":  r.FormValue("weight_credibility"),
 		"weight_target":       r.FormValue("weight_target"),
 	}
-	s.saveSettings(w, r, values, "Configuracoes de IA salvas.")
+	s.saveSettings(w, r, values, "Configurações de IA salvas.")
 }
 
 func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
@@ -338,7 +348,7 @@ func (s *Server) handleSaveDelivery(w http.ResponseWriter, r *http.Request) {
 		"telegram_chat_ids":            normalizeMultiline(r.FormValue("telegram_chat_ids")),
 		"telegram_disable_web_preview": strconv.FormatBool(r.FormValue("telegram_disable_web_preview") == "on"),
 	}
-	s.saveSettings(w, r, values, "Configuracoes de entrega salvas.")
+	s.saveSettings(w, r, values, "Configurações de entrega salvas.")
 }
 
 func (s *Server) handleRunNow(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +370,7 @@ func (s *Server) handleRunNow(w http.ResponseWriter, r *http.Request) {
 			log.Printf("admin run-now failed: %v", err)
 		}
 	}()
-	writeFlash(w, "Execucao iniciada em background.")
+	writeFlash(w, "Execução iniciada em background.")
 }
 
 func (s *Server) handleResendLatest(w http.ResponseWriter, r *http.Request) {
@@ -382,7 +392,7 @@ func (s *Server) handleResendLatest(w http.ResponseWriter, r *http.Request) {
 			log.Printf("admin resend-latest failed: %v", err)
 		}
 	}()
-	writeFlash(w, "Reenvio do ultimo sucesso iniciado em background.")
+	writeFlash(w, "Reenvio do último sucesso iniciado em background.")
 }
 
 func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request, values map[string]string, okMessage string) {
@@ -490,13 +500,15 @@ type dashboardView struct {
 }
 
 type runView struct {
-	ID        int64
-	Status    string
-	Stage     string
-	Progress  string
-	Heartbeat string
-	CreatedAt string
-	Error     string
+	ID           int64
+	Status       string
+	Stage        string
+	Progress     string
+	IssueTitle   string
+	StartedAtISO string
+	Heartbeat    string
+	CreatedAt    string
+	Error        string
 }
 
 type statusView struct {
@@ -527,24 +539,24 @@ var statusTemplate = template.Must(template.New("status-card").Funcs(template.Fu
 	"stageLabel":  stageLabel,
 	"isRunning":   isRunningStatus,
 }).Parse(`
-<section class="card" hx-get="/admin/status/current" hx-trigger="load, every 4s" hx-swap="outerHTML">
-  <h2>Execução Atual</h2>
-  {{if gt .CurrentRun.ID 0}}
-  <table>
-    <tbody>
-      <tr><td>Run</td><td>#{{.CurrentRun.ID}}</td></tr>
-      <tr><td>Status</td><td><span class="status-badge {{statusClass .CurrentRun.Status}}"><span class="spinner {{if isRunning .CurrentRun.Status}}running{{end}}"></span>{{statusLabel .CurrentRun.Status}}</span></td></tr>
-      <tr><td>Etapa</td><td>{{stageLabel .CurrentRun.Stage}}</td></tr>
-      <tr><td>Mensagem</td><td>{{.CurrentRun.Progress}}</td></tr>
-      <tr><td>Heartbeat</td><td>{{.CurrentRun.Heartbeat}}</td></tr>
-      <tr><td>Início</td><td>{{.CurrentRun.CreatedAt}}</td></tr>
-      {{if .CurrentRun.Error}}<tr><td>Erro</td><td>{{.CurrentRun.Error}}</td></tr>{{end}}
-    </tbody>
-  </table>
-  {{else}}
-  <p class="muted">Nenhuma execução registrada.</p>
-  {{end}}
-</section>
+{{if and (gt .CurrentRun.ID 0) (isRunning .CurrentRun.Status)}}
+<div id="current-run" hx-get="/admin/status/current" hx-trigger="load, every 4s" hx-swap="outerHTML">
+  <section class="card live-status" data-started-at="{{.CurrentRun.StartedAtISO}}">
+    <h2>Em andamento</h2>
+    <table>
+      <tbody>
+        <tr><td>Run</td><td>#{{.CurrentRun.ID}}</td></tr>
+        <tr><td>Status</td><td><span class="status-badge {{statusClass .CurrentRun.Status}}"><span class="spinner running"></span>{{statusLabel .CurrentRun.Status}}</span></td></tr>
+        <tr><td>Etapa</td><td>{{stageLabel .CurrentRun.Stage}}</td></tr>
+        <tr><td>Mensagem</td><td>{{.CurrentRun.Progress}}</td></tr>
+        <tr><td>Tempo em execução</td><td><span data-run-elapsed>--:--:--</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+{{else}}
+<div id="current-run" hx-get="/admin/status/current" hx-trigger="load, every 4s" hx-swap="outerHTML"><div class="hidden"></div></div>
+{{end}}
 `))
 
 func normalizeSlug(s string) string {
@@ -646,12 +658,14 @@ func formatRunSummary(item model.RunSummary) runView {
 		heartbeat = item.HeartbeatAt.In(time.Local).Format("02/01/2006 15:04:05")
 	}
 	return runView{
-		ID:        item.ID,
-		Status:    item.Status,
-		Stage:     item.CurrentStage,
-		Progress:  item.ProgressMsg,
-		Heartbeat: heartbeat,
-		CreatedAt: item.CreatedAt.In(time.Local).Format("02/01/2006 15:04:05"),
-		Error:     item.ErrorMessage,
+		ID:           item.ID,
+		Status:       item.Status,
+		Stage:        item.CurrentStage,
+		Progress:     item.ProgressMsg,
+		IssueTitle:   item.IssueTitle,
+		StartedAtISO: item.CreatedAt.UTC().Format(time.RFC3339),
+		Heartbeat:    heartbeat,
+		CreatedAt:    item.CreatedAt.In(time.Local).Format("02/01/2006 15:04:05"),
+		Error:        item.ErrorMessage,
 	}
 }

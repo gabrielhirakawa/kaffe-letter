@@ -241,6 +241,74 @@ Itens:
 	return items, totalUsage, nil
 }
 
+func (s Service) GenerateIssueTitle(ctx context.Context, items []model.CuratedItem) (string, error) {
+	if len(items) == 0 {
+		return "", fmt.Errorf("no items to title")
+	}
+	top := make([]model.CuratedItem, len(items))
+	copy(top, items)
+	sort.SliceStable(top, func(i, j int) bool {
+		return top[i].FinalScore > top[j].FinalScore
+	})
+	if len(top) > 6 {
+		top = top[:6]
+	}
+
+	type titleCandidate struct {
+		Title    string `json:"title"`
+		Category string `json:"category"`
+		Domain   string `json:"domain"`
+	}
+	payload := make([]titleCandidate, 0, len(top))
+	for _, it := range top {
+		payload = append(payload, titleCandidate{
+			Title:    strings.TrimSpace(it.TitlePTBR),
+			Category: strings.TrimSpace(it.Category),
+			Domain:   strings.TrimSpace(it.Domain),
+		})
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	prompt := fmt.Sprintf(`
+Crie um título curto, chamativo e profissional para esta edição de newsletter.
+Regras:
+- responda APENAS JSON válido no formato {"title":"..."}
+- use PT-BR
+- máximo de 6 palavras
+- não cite nomes de categorias
+- não use emoji
+- não termine com ponto final
+- o título precisa resumir o conjunto da edição, não um item isolado
+
+Itens de referência:
+%s
+`, string(b))
+
+	content, _, err := s.callStructuredJSON(ctx,
+		"Você cria títulos curtos e chamativos para newsletters técnicas. Responda apenas JSON válido.",
+		prompt,
+	)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal([]byte(content), &out); err != nil {
+		return "", fmt.Errorf("parse issue title json: %w content=%s", err, content)
+	}
+	title := strings.TrimSpace(out.Title)
+	if title == "" {
+		return "", fmt.Errorf("empty issue title")
+	}
+	if len(strings.Fields(title)) > 8 {
+		return "", fmt.Errorf("issue title too long: %q", title)
+	}
+	return title, nil
+}
+
 func (s Service) callStructuredJSON(ctx context.Context, systemPrompt, userPrompt string) (string, model.TokenUsage, error) {
 	if s.client == nil {
 		return "", model.TokenUsage{}, fmt.Errorf("llm provider is not configured")

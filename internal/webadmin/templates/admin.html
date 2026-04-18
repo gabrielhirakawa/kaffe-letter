@@ -26,61 +26,43 @@
       </nav>
 
       <div class="status">
-        <div class="pill"><span class="state-icon {{if .LLMKeySet}}ok{{else}}warn{{end}}">{{if .LLMKeySet}}✓{{else}}!{{end}}</span>LLM key: {{if .LLMKeySet}}configurada{{else}}nao configurada{{end}}</div>
-        <div class="pill"><span class="state-icon {{if .SMTPPassSet}}ok{{else}}warn{{end}}">{{if .SMTPPassSet}}✓{{else}}!{{end}}</span>SMTP pass: {{if .SMTPPassSet}}configurada{{else}}nao configurada{{end}}</div>
-        <div class="pill"><span class="state-icon {{if .TelegramKeySet}}ok{{else}}warn{{end}}">{{if .TelegramKeySet}}✓{{else}}!{{end}}</span>Telegram token: {{if .TelegramKeySet}}configurado{{else}}nao configurado{{end}}</div>
+        <div class="pill"><span class="state-icon {{if .LLMKeySet}}ok{{else}}warn{{end}}">{{if .LLMKeySet}}✓{{else}}!{{end}}</span>LLM key: {{if .LLMKeySet}}configurada{{else}}não configurada{{end}}</div>
+        <div class="pill"><span class="state-icon {{if .SMTPPassSet}}ok{{else}}warn{{end}}">{{if .SMTPPassSet}}✓{{else}}!{{end}}</span>SMTP pass: {{if .SMTPPassSet}}configurada{{else}}não configurada{{end}}</div>
+        <div class="pill"><span class="state-icon {{if .TelegramKeySet}}ok{{else}}warn{{end}}">{{if .TelegramKeySet}}✓{{else}}!{{end}}</span>Telegram token: {{if .TelegramKeySet}}configurado{{else}}não configurado{{end}}</div>
       </div>
     </aside>
 
     <main class="content">
       <section class="hero">
         <h2>{{if isActiveTab .ActiveTab "dashboard"}}Dashboard{{else if isActiveTab .ActiveTab "categorias"}}Categorias{{else if isActiveTab .ActiveTab "feeds"}}Feeds{{else if isActiveTab .ActiveTab "ia"}}IA{{else if isActiveTab .ActiveTab "entrega"}}Entrega{{else}}Sistema{{end}}</h2>
-        <p>{{if isActiveTab .ActiveTab "dashboard"}}Visao geral das execucoes e operacao diária.{{else if isActiveTab .ActiveTab "categorias"}}Categorias editoriais e cotas da newsletter.{{else if isActiveTab .ActiveTab "feeds"}}Fontes RSS ligadas a cada categoria.{{else if isActiveTab .ActiveTab "ia"}}Modelo, chunking e pesos de curadoria.{{else if isActiveTab .ActiveTab "entrega"}}SMTP, email e Telegram.{{else}}Parametros gerais, timeout e orientacoes de backup.{{end}}</p>
+        <p>{{if isActiveTab .ActiveTab "dashboard"}}Visão geral das execuções e operação diária.{{else if isActiveTab .ActiveTab "categorias"}}Categorias editoriais e cotas da newsletter.{{else if isActiveTab .ActiveTab "feeds"}}Fontes RSS ligadas a cada categoria.{{else if isActiveTab .ActiveTab "ia"}}Modelo, chunking e pesos de curadoria.{{else if isActiveTab .ActiveTab "entrega"}}SMTP, email e Telegram.{{else}}Parâmetros gerais, timeout e orientações de backup.{{end}}</p>
         <div id="flash"></div>
         <div class="hero-actions">
           <button hx-post="/admin/actions/run-now" hx-target="#flash" hx-swap="innerHTML">Executar agora</button>
-          <button class="secondary" hx-post="/admin/actions/resend-latest" hx-target="#flash" hx-swap="innerHTML">Reenviar ultimo sucesso</button>
+          <button class="secondary" hx-post="/admin/actions/resend-latest" hx-target="#flash" hx-swap="innerHTML">Reenviar último sucesso</button>
         </div>
       </section>
 
       <section class="section {{if isActiveTab .ActiveTab "dashboard"}}active{{end}}">
         <div class="cards">
-          <section class="card" hx-get="/admin/status/current" hx-trigger="load, every 4s" hx-swap="outerHTML">
-            <h2>Execução Atual</h2>
-            {{if gt .CurrentRun.ID 0}}
-            <table>
-              <tbody>
-                <tr><td>Run</td><td>#{{.CurrentRun.ID}}</td></tr>
-                <tr><td>Status</td><td><span class="status-badge {{statusClass .CurrentRun.Status}}"><span class="spinner {{if isRunning .CurrentRun.Status}}running{{end}}"></span>{{statusLabel .CurrentRun.Status}}</span></td></tr>
-                <tr><td>Etapa</td><td>{{stageLabel .CurrentRun.Stage}}</td></tr>
-                <tr><td>Mensagem</td><td>{{.CurrentRun.Progress}}</td></tr>
-                <tr><td>Heartbeat</td><td>{{.CurrentRun.Heartbeat}}</td></tr>
-                <tr><td>Início</td><td>{{.CurrentRun.CreatedAt}}</td></tr>
-                {{if .CurrentRun.Error}}<tr><td>Erro</td><td>{{.CurrentRun.Error}}</td></tr>{{end}}
-              </tbody>
-            </table>
-            {{else}}
-            <p class="muted">Nenhuma execução registrada.</p>
-            {{end}}
-          </section>
-
           <section class="card">
-            <h2>Ultimas execucoes</h2>
-            <p>Historico rapido para acompanhar operacao.</p>
+            <h2>Últimas execuções</h2>
+            <p>Histórico rápido para acompanhar a operação.</p>
             <table>
               <thead>
-                <tr><th>Run</th><th>Status</th><th>Criado em</th><th>Erro</th></tr>
+                <tr><th>Run</th><th>Título</th><th>Status</th><th>Criado em</th><th>Erro</th></tr>
               </thead>
               <tbody>
               {{range .Runs}}
                 <tr>
                   <td>#{{.ID}}</td>
+                  <td>{{if .IssueTitle}}{{.IssueTitle}}{{else}}Edição diária{{end}}</td>
                   <td><span class="status-badge {{statusClass .Status}}">{{statusLabel .Status}}</span></td>
                   <td>{{.CreatedAt}}</td>
                   <td class="muted">{{.Error}}</td>
                 </tr>
               {{else}}
-                <tr><td colspan="4" class="muted">Nenhuma execucao registrada.</td></tr>
+                <tr><td colspan="5" class="muted">Nenhuma execução registrada.</td></tr>
               {{end}}
               </tbody>
             </table>
@@ -88,7 +70,7 @@
 
           <section class="card">
             <h2>Resumo</h2>
-            <p>Estado atual da configuracao editorial.</p>
+            <p>Estado atual da configuração editorial.</p>
             <table>
               <tbody>
                 <tr><td>Categorias ativas</td><td>{{len .Categories}}</td></tr>
@@ -100,13 +82,31 @@
             </table>
           </section>
         </div>
+        <div id="current-run" hx-get="/admin/status/current" hx-trigger="load, every 4s" hx-swap="outerHTML">
+          {{if and (gt .CurrentRun.ID 0) (isRunning .CurrentRun.Status)}}
+          <section class="card live-status" data-started-at="{{.CurrentRun.StartedAtISO}}">
+            <h2>Em andamento</h2>
+            <table>
+              <tbody>
+                <tr><td>Run</td><td>#{{.CurrentRun.ID}}</td></tr>
+                <tr><td>Status</td><td><span class="status-badge {{statusClass .CurrentRun.Status}}"><span class="spinner running"></span>{{statusLabel .CurrentRun.Status}}</span></td></tr>
+                <tr><td>Etapa</td><td>{{stageLabel .CurrentRun.Stage}}</td></tr>
+                <tr><td>Mensagem</td><td>{{.CurrentRun.Progress}}</td></tr>
+                <tr><td>Tempo em execução</td><td><span data-run-elapsed>--:--:--</span></td></tr>
+              </tbody>
+            </table>
+          </section>
+          {{else}}
+          <div class="hidden"></div>
+          {{end}}
+        </div>
       </section>
 
       <section class="section {{if isActiveTab .ActiveTab "categorias"}}active{{end}}">
         <div class="cards vertical">
           <section class="card">
             <h2 id="category-form-title">Nova categoria</h2>
-            <p>Crie novas seções editoriais com quota própria.</p>
+            <p>Crie novas seções editoriais com cota própria.</p>
             <form id="category-form" method="post" action="/admin/categories/create" hx-post="/admin/categories/create" hx-target="#flash" hx-swap="innerHTML">
               <input type="hidden" name="mode" value="create">
               <div class="row inline-4">
@@ -116,7 +116,7 @@
                 </div>
                 <div>
                   <label>Nome</label>
-                  <input name="name" placeholder="Exibicao no email">
+                  <input name="name" placeholder="Exibição no email">
                 </div>
                 <div>
                   <label>Quota</label>
@@ -127,12 +127,12 @@
                   <input name="sort_order" value="10">
                 </div>
               </div>
-              <label>Descricao</label>
+                  <label>Descrição</label>
               <textarea name="description"></textarea>
               <label><input type="checkbox" name="is_active" checked style="width:auto;margin-right:8px;">Categoria ativa</label>
               <div class="actions">
                 <button id="category-form-submit" type="submit">Criar categoria</button>
-                <button id="category-form-cancel" type="button" class="ghost hidden" onclick="resetCategoryForm()">Cancelar edicao</button>
+                <button id="category-form-cancel" type="button" class="ghost hidden" onclick="resetCategoryForm()">Cancelar edição</button>
               </div>
             </form>
           </section>
@@ -197,7 +197,7 @@
                   <input name="name" placeholder="Ex: GitHub Blog">
                 </div>
                 <div>
-                  <label>Dominio</label>
+                  <label>Domínio</label>
                   <input name="site_domain" placeholder="Ex: github.blog">
                 </div>
                 <div>
@@ -210,7 +210,7 @@
               <label><input type="checkbox" name="is_active" checked style="width:auto;margin-right:8px;">Feed ativo</label>
               <div class="actions">
                 <button id="feed-form-submit" type="submit">Criar feed</button>
-                <button id="feed-form-cancel" type="button" class="ghost hidden" onclick="resetFeedForm()">Cancelar edicao</button>
+                <button id="feed-form-cancel" type="button" class="ghost hidden" onclick="resetFeedForm()">Cancelar edição</button>
               </div>
             </form>
           </section>
@@ -220,7 +220,7 @@
             <p>Associe cada RSS a uma categoria para guiar a curadoria desde a origem.</p>
             <table>
               <thead>
-                <tr><th>Categoria</th><th>Nome</th><th>Dominio</th><th>Prioridade</th><th></th></tr>
+                <tr><th>Categoria</th><th>Nome</th><th>Domínio</th><th>Prioridade</th><th></th></tr>
               </thead>
               <tbody>
               {{range .Feeds}}
@@ -292,7 +292,7 @@
                   <input name="weight_target" value="{{printf "%.2f" .Config.WeightTarget}}">
                 </div>
                 <div>
-                  <label>Peso relevancia</label>
+                  <label>Peso relevância</label>
                   <input name="weight_relevance" value="{{printf "%.2f" .Config.WeightRelevance}}">
                 </div>
                 <div>
@@ -314,7 +314,7 @@
         <div class="cards">
           <section class="card">
             <h2>Entrega</h2>
-            <p>Hosts, destinatarios e segredos de entrega ficam no banco, com criptografia para os campos sensiveis.</p>
+            <p>Hosts, destinatários e segredos de entrega ficam no banco, com criptografia para os campos sensíveis.</p>
             <form hx-post="/admin/save/delivery" hx-target="#flash" hx-swap="innerHTML">
               <div class="row">
                 <div>
@@ -356,10 +356,12 @@
         <div class="cards">
           <section class="card">
             <h2>Geral</h2>
-            <p>Parametros comuns de operacao e entrega.</p>
+            <p>Parâmetros comuns de operação e entrega.</p>
             <form hx-post="/admin/save/general" hx-target="#flash" hx-swap="innerHTML">
               <label>Timezone</label>
               <input name="timezone" value="{{.Config.Timezone}}">
+              <label>Horário de entrega</label>
+              <input name="delivery_time" value="{{.Config.DeliveryTime}}" placeholder="07:00">
               <label>Assunto base do email</label>
               <input name="email_subject" value="{{.Config.EmailSubject}}">
               <label>HTTP timeout em segundos</label>
@@ -369,13 +371,13 @@
           </section>
 
           <section class="card">
-            <h2>Operacao</h2>
-            <p>Orientacoes de persistencia e backup.</p>
+            <h2>Operação</h2>
+            <p>Orientações de persistência e backup.</p>
             <table>
               <tbody>
                 <tr><td>Banco</td><td>{{.Config.DatabasePath}}</td></tr>
-                <tr><td>Master key</td><td>data/master.key</td></tr>
-                <tr><td>Addr</td><td>{{.Config.ServerAddr}}</td></tr>
+                <tr><td>Chave mestre</td><td>data/master.key</td></tr>
+                <tr><td>Endereço</td><td>{{.Config.ServerAddr}}</td></tr>
               </tbody>
             </table>
             <p class="muted">Backup completo exige manter juntos o SQLite e a master key local do app.</p>
@@ -474,6 +476,43 @@
         });
         form.scrollIntoView({ behavior: "smooth", block: "start" });
       });
+    });
+
+    function formatElapsed(ms) {
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return String(hours).padStart(2, "0") + ":" + String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+    }
+
+    function updateLiveStatusTimer(root) {
+      const card = root && root.querySelector ? root.querySelector("[data-started-at]") : document.querySelector("[data-started-at]");
+      if (!card) return;
+      const startedAt = card.getAttribute("data-started-at");
+      const elapsedNode = card.querySelector("[data-run-elapsed]");
+      if (!startedAt || !elapsedNode) return;
+      const startedAtMs = Date.parse(startedAt);
+      if (Number.isNaN(startedAtMs)) return;
+      const tick = function() {
+        elapsedNode.textContent = formatElapsed(Date.now() - startedAtMs);
+      };
+      tick();
+      if (card._elapsedTimer) {
+        clearInterval(card._elapsedTimer);
+      }
+      card._elapsedTimer = setInterval(tick, 1000);
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      updateLiveStatusTimer(document);
+    });
+
+    document.body.addEventListener("htmx:afterSwap", function(evt) {
+      if (!evt || !evt.target) return;
+      if (evt.target.id === "current-run" || evt.target.closest && evt.target.closest("#current-run")) {
+        updateLiveStatusTimer(document);
+      }
     });
   </script>
 </body>

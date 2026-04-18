@@ -41,7 +41,8 @@ type Config struct {
 	WeightTarget      float64
 	MaxPerDomain      int
 
-	Timezone string
+	Timezone     string
+	DeliveryTime string
 
 	SMTPURL                string
 	SMTPHost               string
@@ -92,7 +93,8 @@ func Load() (Config, error) {
 		WeightTarget:      0.10,
 		MaxPerDomain:      2,
 
-		Timezone: "America/Sao_Paulo",
+		Timezone:     "America/Sao_Paulo",
+		DeliveryTime: "07:00",
 
 		SMTPHost:               "smtp.gmail.com",
 		SMTPPort:               587,
@@ -126,6 +128,9 @@ func (cfg Config) ValidateRuntime() error {
 	}
 	if strings.TrimSpace(cfg.LLMModel) == "" {
 		return fmt.Errorf("llm_model is required")
+	}
+	if _, err := time.Parse("15:04", strings.TrimSpace(cfg.DeliveryTime)); err != nil {
+		return fmt.Errorf("delivery_time must use HH:MM format")
 	}
 	if cfg.EmailFrom == "" {
 		return fmt.Errorf("email_from is required")
@@ -215,6 +220,7 @@ func overlayPersistedSettings(ctx context.Context, cfg *Config) error {
 		"weight_target":                fmt.Sprintf("%.2f", cfg.WeightTarget),
 		"max_per_domain":               strconv.Itoa(cfg.MaxPerDomain),
 		"timezone":                     cfg.Timezone,
+		"delivery_time":                cfg.DeliveryTime,
 		"smtp_host":                    cfg.SMTPHost,
 		"smtp_port":                    strconv.Itoa(cfg.SMTPPort),
 		"smtp_user":                    cfg.SMTPUser,
@@ -307,6 +313,7 @@ func overlayPersistedSettings(ctx context.Context, cfg *Config) error {
 	cfg.WeightTarget = parseFloat(getString(values, "weight_target", ""), cfg.WeightTarget)
 	cfg.MaxPerDomain = parseInt(getString(values, "max_per_domain", ""), cfg.MaxPerDomain)
 	cfg.Timezone = getString(values, "timezone", cfg.Timezone)
+	cfg.DeliveryTime = getString(values, "delivery_time", cfg.DeliveryTime)
 	cfg.SMTPHost = getString(values, "smtp_host", cfg.SMTPHost)
 	cfg.SMTPPort = parseInt(getString(values, "smtp_port", ""), cfg.SMTPPort)
 	cfg.SMTPUser = getString(values, "smtp_user", cfg.SMTPUser)
@@ -404,6 +411,7 @@ func applyBootstrapEnvDefaults(defaults map[string]string, cryptoSvc secure.Serv
 	setLines("telegram_chat_ids", "TELEGRAM_CHAT_IDS")
 	setString("telegram_disable_web_preview", "TELEGRAM_DISABLE_WEB_PREVIEW")
 	setString("timezone", "TIMEZONE")
+	setString("delivery_time", "DELIVERY_TIME")
 	setString("http_timeout_seconds", "HTTP_TIMEOUT_SECONDS")
 	setString("max_items_per_feed", "MAX_ITEMS_PER_FEED")
 	setString("max_items_total", "MAX_ITEMS_TOTAL")

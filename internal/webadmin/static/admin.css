@@ -154,6 +154,9 @@ button.ghost {
   padding:20px;
   box-shadow:0 8px 28px rgba(53,43,28,.06);
 }
+.live-status {
+  margin-top: 8px;
+}
 .row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .row.inline-4 { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }

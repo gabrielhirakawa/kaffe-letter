@@ -53,38 +53,52 @@ docker compose build
 docker compose run --rm newsletter
 ```
 
+## Containers
+
+`kaffe-letter` is designed to run cleanly in containers:
+
+- `Dockerfile` builds a small Go binary for the application.
+- `docker-compose.yml` is the recommended self-hosted entrypoint for local and production-like runs.
+- `.env` remains useful for bootstrap, especially on headless servers.
+- The app persists state in SQLite, so the container only needs a mounted data directory.
+- In production, the common pattern is cron or a scheduler invoking the newsletter container once per day.
+
 ## Configuration
 
-The app uses environment variables for bootstrap and SQLite/admin as the source of truth after the first boot.
+There are two ways to bootstrap `kaffe-letter`:
 
-Bootstrap variables:
+- via the web UI, which persists settings in SQLite
+- via an `.env` file, which is optional and useful for headless or first-run setup
 
-- `DATABASE_PATH`
-- `SERVER_ADDR`
-- `LOG_LEVEL`
-- `TIMEZONE`
-- `HTTP_TIMEOUT_SECONDS`
-- `LLM_PROVIDER`
-- `LLM_MODEL`
-- `LLM_BASE_URL`
-- `LLM_API_KEY`
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USER`
-- `SMTP_PASS`
-- `EMAIL_FROM`
-- `EMAIL_TO`
-- `EMAIL_SUBJECT`
-- `TELEGRAM_ENABLED`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_IDS`
-- `TELEGRAM_DISABLE_WEB_PREVIEW`
+Optional bootstrap variables:
+
+| Variable | Purpose | Notes |
+| --- | --- | --- |
+| `DATABASE_PATH` | SQLite file location | Defaults to `./data/newsletter.db` |
+| `SERVER_ADDR` | Admin server bind address | Defaults to `:8080` |
+| `LOG_LEVEL` | Runtime logging level | Defaults to `info` |
+| `TIMEZONE` | Newsletter scheduling timezone | Defaults to `America/Sao_Paulo` |
+| `HTTP_TIMEOUT_SECONDS` | Timeout for feeds and LLM calls | Defaults to `20` |
+| `LLM_PROVIDER` | LLM backend selector | Accepts `openai`, `anthropic`, `gemini` or `local` |
+| `LLM_MODEL` | Model name | Example: `gpt-5-nano` |
+| `LLM_BASE_URL` | Custom endpoint for local/OpenAI-compatible providers | Mostly useful for `local` |
+| `LLM_API_KEY` | LLM credential | Optional for some local setups |
+| `SMTP_HOST` | SMTP server hostname | Required only if you use email delivery |
+| `SMTP_PORT` | SMTP server port | Required only if you use email delivery |
+| `SMTP_USER` | SMTP username | Required only if you use email delivery |
+| `SMTP_PASS` | SMTP password | Sensitive value, encrypted in SQLite |
+| `EMAIL_FROM` | Sender email address | Required only if you use email delivery |
+| `EMAIL_TO` | Newsletter recipients | One or more addresses |
+| `EMAIL_SUBJECT` | Email subject template | Defaults to a daily newsletter subject |
+| `TELEGRAM_ENABLED` | Telegram delivery toggle | `true` or `false` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot credential | Sensitive value, encrypted in SQLite |
+| `TELEGRAM_CHAT_IDS` | Telegram destinations | One or more chat IDs |
+| `TELEGRAM_DISABLE_WEB_PREVIEW` | Disable link previews in Telegram | Defaults to `true` |
 
 Notes:
 
 - `.env` is optional and useful for local or headless bootstrap.
-- `LLM_PROVIDER` accepts `openai`, `anthropic`, `gemini` or `local`.
-- `LLM_BASE_URL` is mainly useful for local or OpenAI-compatible endpoints.
+- You can also start directly from the admin UI and let SQLite become the source of truth after the first boot.
 - Sensitive values are encrypted before being written to SQLite.
 - The local master key is stored at `data/master.key`.
 - Editorial settings and feed buckets are managed in the admin after bootstrap.

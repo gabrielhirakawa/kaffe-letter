@@ -15,7 +15,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
-	"rss-ai-newsletter/internal/model"
+	"kaffe-letter/internal/model"
 )
 
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)

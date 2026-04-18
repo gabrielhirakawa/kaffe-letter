@@ -1,4 +1,4 @@
-module rss-ai-newsletter
+module kaffe-letter
 
 go 1.22
 

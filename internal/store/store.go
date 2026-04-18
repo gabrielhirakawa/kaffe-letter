@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"rss-ai-newsletter/internal/model"
+	"kaffe-letter/internal/model"
 )
 
 type Store struct {

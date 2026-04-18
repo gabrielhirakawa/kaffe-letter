@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: rss-ai-newsletter:latest
+    image: kaffe-letter:latest
     env_file:
       - .env
     volumes:

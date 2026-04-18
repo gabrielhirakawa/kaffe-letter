@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"rss-ai-newsletter/internal/config"
-	"rss-ai-newsletter/internal/curation"
-	"rss-ai-newsletter/internal/email"
-	"rss-ai-newsletter/internal/model"
-	"rss-ai-newsletter/internal/render"
-	"rss-ai-newsletter/internal/rss"
-	"rss-ai-newsletter/internal/store"
-	"rss-ai-newsletter/internal/telegram"
+	"kaffe-letter/internal/config"
+	"kaffe-letter/internal/curation"
+	"kaffe-letter/internal/email"
+	"kaffe-letter/internal/model"
+	"kaffe-letter/internal/render"
+	"kaffe-letter/internal/rss"
+	"kaffe-letter/internal/store"
+	"kaffe-letter/internal/telegram"
 )
 
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)

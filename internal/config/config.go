@@ -11,9 +11,9 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"rss-ai-newsletter/internal/model"
-	"rss-ai-newsletter/internal/secure"
-	"rss-ai-newsletter/internal/store"
+	"kaffe-letter/internal/model"
+	"kaffe-letter/internal/secure"
+	"kaffe-letter/internal/store"
 )
 
 type Config struct {
@@ -214,6 +214,9 @@ func overlayPersistedSettings(ctx context.Context, cfg *Config) error {
 		"telegram_disable_web_preview": strconv.FormatBool(cfg.TelegramDisablePreview),
 		"http_timeout_seconds":         strconv.Itoa(int(cfg.HTTPTimeout / time.Second)),
 	}
+	if err := applyBootstrapEnvDefaults(defaults, cryptoSvc); err != nil {
+		return err
+	}
 	if err := st.EnsureSettings(ctx, defaults); err != nil {
 		return err
 	}
@@ -294,6 +297,67 @@ func overlayPersistedSettings(ctx context.Context, cfg *Config) error {
 	cfg.TelegramChatIDs = splitLines(getString(values, "telegram_chat_ids", strings.Join(cfg.TelegramChatIDs, "\n")))
 	cfg.TelegramDisablePreview = parseBool(getString(values, "telegram_disable_web_preview", ""), cfg.TelegramDisablePreview)
 	cfg.HTTPTimeout = time.Duration(parseInt(getString(values, "http_timeout_seconds", ""), int(cfg.HTTPTimeout/time.Second))) * time.Second
+	return nil
+}
+
+func applyBootstrapEnvDefaults(defaults map[string]string, cryptoSvc secure.Service) error {
+	setString := func(key, envName string) {
+		if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
+			defaults[key] = value
+		}
+	}
+	setLines := func(key, envName string) {
+		if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
+			defaults[key] = strings.Join(splitLines(value), "\n")
+		}
+	}
+	setSecret := func(key, envName string) error {
+		value := strings.TrimSpace(os.Getenv(envName))
+		if value == "" {
+			return nil
+		}
+		encrypted, err := cryptoSvc.Encrypt(value)
+		if err != nil {
+			return err
+		}
+		defaults[key] = encrypted
+		return nil
+	}
+
+	setString("openai_model", "OPENAI_MODEL")
+	if err := setSecret("openai_api_key", "OPENAI_API_KEY"); err != nil {
+		return err
+	}
+	setString("smtp_host", "SMTP_HOST")
+	setString("smtp_port", "SMTP_PORT")
+	setString("smtp_user", "SMTP_USER")
+	if err := setSecret("smtp_pass", "SMTP_PASS"); err != nil {
+		return err
+	}
+	setString("email_from", "EMAIL_FROM")
+	setLines("email_to", "EMAIL_TO")
+	setString("email_subject", "EMAIL_SUBJECT")
+	setString("telegram_enabled", "TELEGRAM_ENABLED")
+	if err := setSecret("telegram_bot_token", "TELEGRAM_BOT_TOKEN"); err != nil {
+		return err
+	}
+	setLines("telegram_chat_ids", "TELEGRAM_CHAT_IDS")
+	setString("telegram_disable_web_preview", "TELEGRAM_DISABLE_WEB_PREVIEW")
+	setString("timezone", "TIMEZONE")
+	setString("http_timeout_seconds", "HTTP_TIMEOUT_SECONDS")
+	setString("max_items_per_feed", "MAX_ITEMS_PER_FEED")
+	setString("max_items_total", "MAX_ITEMS_TOTAL")
+	setString("candidate_pool_size", "CANDIDATE_POOL_SIZE")
+	setString("curated_items_count", "CURATED_ITEMS_COUNT")
+	setString("curation_chunk_size", "CURATION_CHUNK_SIZE")
+	setLines("target_domains", "TARGET_DOMAINS")
+	setLines("target_keywords", "TARGET_KEYWORDS")
+	setLines("blocked_domains", "BLOCKED_DOMAINS")
+	setString("weight_relevance", "WEIGHT_RELEVANCE")
+	setString("weight_novelty", "WEIGHT_NOVELTY")
+	setString("weight_credibility", "WEIGHT_CREDIBILITY")
+	setString("weight_target", "WEIGHT_TARGET")
+	setString("max_per_domain", "MAX_PER_DOMAIN")
 	return nil
 }
 

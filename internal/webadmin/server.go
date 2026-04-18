@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"rss-ai-newsletter/internal/config"
-	"rss-ai-newsletter/internal/model"
-	"rss-ai-newsletter/internal/pipeline"
-	"rss-ai-newsletter/internal/secure"
-	"rss-ai-newsletter/internal/store"
+	"kaffe-letter/internal/config"
+	"kaffe-letter/internal/model"
+	"kaffe-letter/internal/pipeline"
+	"kaffe-letter/internal/secure"
+	"kaffe-letter/internal/store"
 )
 
 type Server struct {

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"rss-ai-newsletter/internal/config"
-	"rss-ai-newsletter/internal/model"
+	"kaffe-letter/internal/config"
+	"kaffe-letter/internal/model"
 )
 
 type Service struct {

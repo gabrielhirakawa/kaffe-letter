@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"rss-ai-newsletter/internal/model"
+	"kaffe-letter/internal/model"
 )
 
 type Payload struct {

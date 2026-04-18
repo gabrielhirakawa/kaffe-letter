@@ -1,0 +1,11 @@
+services:
+  newsletter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rss-ai-newsletter:latest
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: "no"

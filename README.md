@@ -2,7 +2,7 @@
 
 ![kaffe-letter logo](/logo.png)
 
-`kaffe-letter` is a self-hosted RSS newsletter engine with AI curation, bilingual output and daily delivery by email, with optional Telegram support.
+`kaffe-letter` is an open-source, self-hosted RSS newsletter engine with AI curation, bilingual output and daily delivery by **email**, with optional **Telegram support**.
 
 ## What It Does
 

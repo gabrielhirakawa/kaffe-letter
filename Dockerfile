@@ -8,8 +8,6 @@ COPY logo.png screenshot.png ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /kaffe-letter ./cmd/newsletter
 
 FROM alpine:3.20
-RUN adduser -D appuser
 WORKDIR /app
 COPY --from=builder /kaffe-letter /usr/local/bin/kaffe-letter
-USER appuser
 ENTRYPOINT ["/usr/local/bin/kaffe-letter"]

@@ -8,6 +8,8 @@ services:
     env_file:
       - path: .env
         required: false
+    ports:
+      - "8080:8080"
     volumes:
       - kaffe-letter-data:/app/data
     restart: "no"

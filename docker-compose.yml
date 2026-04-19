@@ -9,5 +9,8 @@ services:
       - path: .env
         required: false
     volumes:
-      - ./data:/app/data
+      - kaffe-letter-data:/app/data
     restart: "no"
+
+volumes:
+  kaffe-letter-data:

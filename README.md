@@ -60,7 +60,7 @@ docker compose up -d
 - `docker-compose.yml` is the recommended self-hosted entrypoint for local and production-like runs.
 - `.env` is optional and only used if you want bootstrap values in a file.
 - The default container command is `server`, so `docker compose up -d` starts the admin UI.
-- The app persists state in SQLite, so the container only needs a mounted data directory.
+- The app persists state in SQLite, so the container only needs a persistent Docker volume.
 - In production, the common pattern is cron or a scheduler invoking the newsletter container once per day.
 
 ## Configuration

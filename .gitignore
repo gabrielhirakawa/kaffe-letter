@@ -6,6 +6,6 @@ logs/
 *.db
 *.sqlite
 
-newsletter
+/newsletter
 
 .cache/

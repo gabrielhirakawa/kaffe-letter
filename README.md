@@ -59,10 +59,10 @@ docker compose up -d
 - `Dockerfile` builds a small Go binary for the application.
 - `docker-compose.yml` is the recommended self-hosted entrypoint for local and production-like runs.
 - `.env` is optional and only used if you want bootstrap values in a file.
-- The default container command is `server`, so `docker compose up -d` starts the admin UI.
+- The default container command is `server`, so `docker compose up -d` starts the admin UI and the built-in daily scheduler.
 - The admin UI is exposed on port `8080` by default.
 - The app persists state in SQLite, so the container only needs a persistent Docker volume.
-- In production, the common pattern is cron or a scheduler invoking the newsletter container once per day.
+- `DELIVERY_TIME` controls the daily delivery window used by the built-in scheduler.
 
 ## Configuration
 
@@ -108,7 +108,7 @@ Notes:
 ## Runtime Modes
 
 - `run`: executes the daily newsletter pipeline.
-- `server`: starts the admin UI.
+- `server`: starts the admin UI and the built-in daily scheduler.
 - `resend`: re-sends a previously generated edition without calling AI.
 
 Examples:

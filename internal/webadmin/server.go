@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"kaffe-letter/internal/config"
@@ -20,11 +21,14 @@ import (
 )
 
 type Server struct {
-	cfg config.Config
+	cfg             config.Config
+	executionMu     sync.Mutex
+	executionActive bool
 }
 
 func Run(ctx context.Context, cfg config.Config) error {
 	srv := &Server{cfg: cfg}
+	go srv.startDeliveryScheduler(ctx)
 	mux := http.NewServeMux()
 	assetsFS, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -356,20 +360,22 @@ func (s *Server) handleRunNow(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	go func() {
-		cfg, err := config.Load()
-		if err != nil {
-			log.Printf("admin run-now load config failed: %v", err)
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("admin run-now load config failed: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.launchExecution(r.Context(), "admin run-now", cfg, func() error {
+		return pipeline.RunDaily(context.Background(), cfg)
+	}); err != nil {
+		if err == errExecutionInProgress {
+			writeFlash(w, "Já existe uma execução em andamento.")
 			return
 		}
-		if err := cfg.ValidateRuntime(); err != nil {
-			log.Printf("admin run-now validation failed: %v", err)
-			return
-		}
-		if err := pipeline.RunDaily(context.Background(), cfg); err != nil {
-			log.Printf("admin run-now failed: %v", err)
-		}
-	}()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	writeFlash(w, "Execução iniciada em background.")
 }
 
@@ -378,20 +384,22 @@ func (s *Server) handleResendLatest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	go func() {
-		cfg, err := config.Load()
-		if err != nil {
-			log.Printf("admin resend-latest load config failed: %v", err)
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("admin resend-latest load config failed: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.launchExecution(r.Context(), "admin resend-latest", cfg, func() error {
+		return pipeline.Resend(context.Background(), cfg, 0, true)
+	}); err != nil {
+		if err == errExecutionInProgress {
+			writeFlash(w, "Já existe uma execução em andamento.")
 			return
 		}
-		if err := cfg.ValidateRuntime(); err != nil {
-			log.Printf("admin resend-latest validation failed: %v", err)
-			return
-		}
-		if err := pipeline.Resend(context.Background(), cfg, 0, true); err != nil {
-			log.Printf("admin resend-latest failed: %v", err)
-		}
-	}()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	writeFlash(w, "Reenvio do último sucesso iniciado em background.")
 }
 
